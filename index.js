@@ -4,35 +4,42 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// ENV VARIABLES (set these in Railway)
+// Environment variables (set in Railway)
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const API_KEY = process.env.API_KEY;
 
-// WEBHOOK
+// Webhook endpoint
 app.post('/webhook', async (req, res) => {
     // Always respond fast
     res.sendStatus(200);
 
-    const event = req.body;
+    try {
+        const event = req.body;
 
-    // Only process incoming messages (not your own bot replies)
-    if (event.event === "messages.upsert" && !event.data.key.fromMe) {
+        if (
+            event &&
+            event.event === "messages.upsert" &&
+            !event.data?.key?.fromMe
+        ) {
+            const remoteJid = event.data.key.remoteJid;
 
-        const remoteJid = event.data.key.remoteJid;
+            const textMessage =
+                event.data.message?.conversation ||
+                event.data.message?.extendedTextMessage?.text;
 
-        const textMessage =
-            event.data.message?.conversation ||
-            event.data.message?.extendedTextMessage?.text;
+            if (textMessage) {
+                console.log(Received: ${textMessage});
 
-        if (textMessage) {
+                const url = ${EVOLUTION_URL}/message/sendText/${event.instance};
 
-            console.log(Received: ${textMessage});
-
-            try {
                 await axios.post(
-                    ${EVOLUTION_URL}/message/sendText/${event.instance},
+                    url,
                     {
                         number: remoteJid,
+                        options: {
+                            delay: 1000,
+                            presence: "composing"
+                        },
                         textMessage: {
                             text: Bot received: ${textMessage}
                         }
@@ -43,16 +50,15 @@ app.post('/webhook', async (req, res) => {
                         }
                     }
                 );
-            } catch (error) {
-                console.error("Send error:", error.message);
             }
         }
+    } catch (err) {
+        console.error("Webhook error:", err.message);
     }
 });
 
-// START SERVER
+// Start server
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
     console.log(Bot running on port ${PORT});
 });
