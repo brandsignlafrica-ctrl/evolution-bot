@@ -4,13 +4,10 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// Environment variables (set in Railway)
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const API_KEY = process.env.API_KEY;
 
-// Webhook endpoint
 app.post('/webhook', async (req, res) => {
-    // Always respond fast
     res.sendStatus(200);
 
     try {
@@ -57,7 +54,6 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(Bot running on port ${PORT});
