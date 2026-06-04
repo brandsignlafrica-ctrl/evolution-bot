@@ -1,12 +1,11 @@
-console.log("SERVER STARTED ON PORT " + PORT);
-console.log("🔥 THE ENTRY FILE IS EXECUTING 🔥");
-
 const express = require('express');
 const app = express();
 
+console.log("ENTRY FILE IS EXECUTING");
+
 app.get('/', (req, res) => {
-    console.log("🟢 PROXY ROUTING SUCCESSFUL - ROOT HIT");
-    res.status(200).send("Railway container is alive and routing correctly.");
+    console.log("ROOT HIT");
+    res.status(200).send("Server working");
 });
 
 const PORT = process.env.PORT || 3000;
