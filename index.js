@@ -1,3 +1,4 @@
+throw new Error("FORCE CRASH TEST");
 console.log("🔥 THE ENTRY FILE IS EXECUTING 🔥");
 
 const express = require('express');
