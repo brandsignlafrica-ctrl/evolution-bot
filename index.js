@@ -1,11 +1,10 @@
 require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
@@ -17,100 +16,119 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Simple greetings - no template strings, no errors
-const GREETINGS = {
-  en: "Hi! I'm the BrandSignl assistant.\n\nI'll create a custom social media post for your business - free.\n\nWhat type of business do you have? (e.g. nail tech, hair stylist, lash tech, waxing, makeup artist)",
-  pt: "Oi! Sou o assistente BrandSignl.\n\nVou criar um post de redes sociais personalizado para o seu negocio - gratis.\n\nQual e o seu tipo de negocio? (ex: manicure, cabelereiro, cilios, depilacao, maquiagem)",
-  es: "Hola! Soy el asistente BrandSignl.\n\nVoy a crear un post de redes sociales personalizado para tu negocio - gratis.\n\nQue tipo de negocio tienes? (ej: nail tech, estilista, pestanas, depilacion, maquillaje)"
-};
+// Simple memory for conversation state
+const userStates = {};
 
-async function sendMessage(to, text) {
+// Evolution API send message - FIXED FORMAT
+async function sendMessage(phone, text) {
+  // Safety check: never send empty text
+  if (!text || text.trim() === '') {
+    text = "Sorry, something went wrong. Please type 'hi' again.";
+  }
+  
+  console.log('Sending to WhatsApp:', text);
+  
   try {
-    await axios.post(`${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
-      number: to,
-      textMessage: { text }
-    }, {
-      headers: { 'apikey': EVOLUTION_KEY }
-    });
-  } catch (e) {
-    console.log('Send error:', e.response?.data || e.message);
+    await axios.post(
+      `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
+      {
+        number: phone,
+        textMessage: { text: text } // ← Evolution needs this exact format
+      },
+      {
+        headers: { 
+          apikey: EVOLUTION_KEY,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log('[Bot] Message sent successfully');
+  } catch (error) {
+    console.error('[Bot] sendMessage failed:', error.response?.data || error.message);
   }
 }
 
-async function generatePost(businessType, lang) {
-  const prompts = {
-    en: `Create 1 engaging Instagram caption for a ${businessType} business in Brazil. Keep it under 150 chars, add 3 hashtags, use friendly tone.`,
-    pt: `Crie 1 legenda engajadora para Instagram de um negocio de ${businessType} no Brasil. Max 150 caracteres, 3 hashtags, tom amigavel.`,
-    es: `Crea 1 caption atractivo para Instagram de un negocio de ${businessType} en Brasil. Max 150 caracteres, 3 hashtags, tono amigable.`
-  };
-
+// Generate Instagram post with OpenAI
+async function generatePost(niche) {
   try {
-    const res = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompts[lang] }],
-      max_tokens: 200
-    }, {
-      headers: { 'Authorization': `Bearer ${OPENAI_KEY}` }
-    });
-    return res.data.choices[0].message.content;
-  } catch (e) {
-    return lang === 'pt'? 'Ops! Erro ao gerar post. Tente novamente.' : 'Error generating post. Try again.';
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini',
+        messages: [{
+          role: 'user',
+          content: `Create an engaging Instagram post for a ${niche} business. Include caption with emojis, 5-7 hashtags, and call to action.`
+        }],
+        max_tokens: 300
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('OpenAI error:', error.response?.data || error.message);
+    return `🔥 New post idea for ${niche}!\n\nBoost your ${niche} business with amazing content!\n\nDM us to get started 🚀\n\n#${niche} #business #marketing #growth #viral`;
   }
 }
 
-function detectLang(text) {
-  text = text.toLowerCase();
-  if (text.includes('oi') || text.includes('ola') || text.includes('negocio')) return 'pt';
-  if (text.includes('hola') || text.includes('negocio')) return 'es';
-  return 'en';
-}
-
+// Webhook from Evolution API
 app.post('/webhook', async (req, res) => {
   try {
     const data = req.body;
-    if (!data?.data?.key?.remoteJid) return res.sendStatus(200);
-
-    const from = data.data.key.remoteJid.replace('@s.whatsapp.net', '');
-    const message = data.data.message?.conversation || data.data.message?.extendedTextMessage?.text || '';
-    if (!message) return res.sendStatus(200);
-
-    console.log(`Msg from ${from}: ${message}`);
-
-    // Check if user exists
-    const { data: user } = await supabase
-     .from('users')
-     .select('*')
-     .eq('phone', from)
-     .single();
-
-    const lang = detectLang(message);
-
-    if (!user) {
-      // New user - save and send greeting
-      await supabase.from('users').insert([{ phone: from, stage: 'greeting' }]);
-      await sendMessage(from, GREETINGS[lang]);
-    } else if (user.stage === 'greeting') {
-      // User replied with business type - generate post
-      await supabase.from('users').update({ stage: 'generated', business_type: message }).eq('phone', from);
-
-      const waitingMsg = lang === 'pt'? 'Gerando seu post personalizado... aguarde 5s' : 'Generating your custom post... wait 5s';
-      await sendMessage(from, waitingMsg);
-
-      const post = await generatePost(message, lang);
-      await sendMessage(from, post);
-
-      const upsell = lang === 'pt'
-       ? '\n\nQuer 6 posts como esse por R$29? Responda SIM pra receber via Pix'
-        : '\n\nWant 6 posts like this for R$29? Reply YES for Pix payment';
-      await sendMessage(from, upsell);
+    console.log('[Webhook] Received event:', data.event);
+    
+    if (data.event!== 'messages.upsert') return res.sendStatus(200);
+    
+    const message = data.data;
+    const phone = message.key.remoteJid.split('@')[0];
+    const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
+    const pushName = message.pushName || 'User';
+    
+    console.log(`[Webhook] Processing: from=${phone} pushName="${pushName}" text="${text}"`);
+    
+    // Initialize user state
+    if (!userStates[phone]) {
+      userStates[phone] = { step: 'welcome', niche: null };
     }
-
+    
+    const state = userStates[phone];
+    console.log(`[Bot] Message from ${phone} | step=${state.step} | text="${text}"`);
+    
+    // Bot logic
+    if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello') {
+      state.step = 'awaiting_niche';
+      await sendMessage(phone, `Hi ${pushName}! 👋 Welcome to AI Content Bot!\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym, boutique`);
+    }
+    else if (state.step === 'awaiting_niche') {
+      state.niche = text;
+      state.step = 'generating';
+      await sendMessage(phone, `Perfect! Generating Instagram post for your ${text} business... ⏳`);
+      
+      const post = await generatePost(text);
+      await sendMessage(phone, post);
+      
+      await sendMessage(phone, `Want another post? Just type your business type again!`);
+      state.step = 'awaiting_niche';
+    }
+    else {
+      await sendMessage(phone, `Type 'hi' to start! I can create Instagram posts for any business type.`);
+    }
+    
     res.sendStatus(200);
-  } catch (e) {
-    console.log('Webhook error:', e);
-    res.sendStatus(200);
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.sendStatus(500);
   }
 });
 
-app.get('/', (req, res) => res.send('Bot running'));
-app.listen(PORT, () => console.log(`SERVER STARTED ON PORT ${PORT}`));
+app.get('/', (req, res) => {
+  res.send('Bot is running! ✅');
+});
+
+app.listen(PORT, () => {
+  console.log(`SERVER STARTED ON PORT ${PORT}`);
+});
