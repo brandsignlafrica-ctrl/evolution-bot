@@ -2,7 +2,8 @@
 
 /**
  * BrandSignl WhatsApp Bot — Stage 1
- * Fixed: sendMessage now uses 'text' field for Evolution API v2
+ * Fixed: sendMessage uses 'text' field for Evolution API v2
+ * Fixed: GREETINGS syntax error
  */
 
 const express = require('express');
@@ -14,17 +15,16 @@ app.use(express.urlencoded({ extended: true }));
 console.log("ENTRY FILE IS EXECUTING");
 
 // ─── Config ──────────────────────────────────
-
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL || '';
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'brandsignl';
 const BRANDSIGNL_URL = process.env.BRANDSIGNL_URL || 'https://brandsignl.com';
 const OWNER_NUMBER = process.env.BOT_OWNER_NUMBER || '';
 
-// ─── In-memory session store ──────────────────────────────────────────────────
+// ─── In-memory session store ─────────────────
 const sessions = new Map();
 
-// ─── Niche keyword detection ──────────────────────────────────────────────────
+// ─── Niche keyword detection ─────────────────
 function detectNiche(text) {
   const t = text.toLowerCase();
   if (/nail|unha|acr[iy]l|gel|manicur/.test(t)) return 'nails';
@@ -35,7 +35,7 @@ function detectNiche(text) {
   return null;
 }
 
-// ─── Language detection ───────────────────────────────────────────────────────
+// ─── Language detection ──────────────────────
 function detectLang(text) {
   const t = text.toLowerCase();
   if (/\b(oi|olá|ola|obrigad|quero|meu|minha|não|sim|agenda|clientes)\b/.test(t)) return 'pt';
@@ -43,7 +43,7 @@ function detectLang(text) {
   return 'en';
 }
 
-// ─── Evolution API helpers ────────────────────────────────────────────────────
+// ─── Evolution API helpers ───────────────────
 async function sendMessage(to, text) {
   if (!EVOLUTION_URL ||!EVOLUTION_KEY) {
     console.warn('[Bot] EVOLUTION_API_URL or EVOLUTION_API_KEY not set — skipping send');
@@ -71,7 +71,7 @@ async function sendMessage(to, text) {
   }
 }
 
-// ─── BrandSignl generator API call ───────────────────────────────────────────
+// ─── BrandSignl generator API call ───────────
 async function generatePost(businessInput, lang = 'en') {
   const url = `${BRANDSIGNL_URL}/api/wa-generate`;
   try {
@@ -92,11 +92,11 @@ async function generatePost(businessInput, lang = 'en') {
   }
 }
 
-// ─── Conversation flow ────────────────────────────────────────────────────────
+// ─── Conversation flow ───────────────────────
 const GREETINGS = {
-  en: (name) => `Hi${name? ' ' + name : ''}! 👋 I'm the BrandSignl assistant.\n\nI'll create a custom social media post for your business — *free*.\n\nWhat type of business do you have? (e.g. nail tech, hair stylist, lash tech, waxing, makeup artist)`,
+  en: (name) => `Hi${name? ' + name : ''}! 👋 I'm the BrandSignl assistant.\n\nI'll create a custom social media post for your business — *free*.\n\nWhat type of business do you have? (e.g. nail tech, hair stylist, lash tech, waxing, makeup artist)`,
   pt: (name) => `Oi${name? ' + name : ''}! 👋 Sou o assistente BrandSignl.\n\nVou criar um post de redes sociais personalizado para o seu negócio — *grátis*.\n\nQual é o seu tipo de negócio? (ex: manicure, cabelereiro, cílios, depilação, maquiagem)`,
-  es: (name) => `¡Hola${name? ' + name : ''}! 👋 Soy el asistente BrandSignl.\n\nVoy a crear un post de redes sociales personalizado para tu negocio — *gratis*.\n\nQué tipo de negocio tienes? (ej: nail tech, estilista, pestañas, depilación, maquillaje)`,
+  es: (name) => `¡Hola${name? ' + name : ''}! 👋 Soy el asistente BrandSignl.\n\nVoy a crear un post de redes sociales personalizado para tu negocio — *gratis*.\n\nQué tipo de negocio tienes? (ej: nail tech, estilista, pestañas, depilación, maquillaje)`
 };
 
 const GENERATING = {
@@ -123,7 +123,7 @@ const RESULT_FOOTER = {
   es: '\n\n📲 ¿Quieres 6 posts así? Responde *SÍ* o visita: ' + BRANDSIGNL_URL + '/pilot',
 };
 
-// ─── Manual override: if owner sends "PAUSA <number>", pause that session ─────
+// ─── Manual override ─────────────────────────
 function checkOwnerCommand(from, text) {
   if (from!== OWNER_NUMBER && from!== OWNER_NUMBER + '@s.whatsapp.net') return false;
   const match = text.match(/^PAUSA\s+(\d+)/i);
@@ -145,7 +145,7 @@ function checkOwnerCommand(from, text) {
   return false;
 }
 
-// ─── Main message handler ─────────────────────────────────────────────────────
+// ─── Main message handler ────────────────────
 async function handleMessage(from, text, pushName) {
   const phone = from.replace('@s.whatsapp.net', '').replace(/\D/g, '');
 
@@ -226,9 +226,9 @@ async function handleMessage(from, text, pushName) {
     const t = text.toLowerCase().trim();
     if (/^(yes|sim|sí|si|yeah|yep|oui|ja)$/.test(t)) {
       const upsell = {
-        en: `🎉 Great! Get your 6 custom posts here:\n${BRANDSIGNL_URL}/pilot\n\nAny questions? Just reply here.`,
-        pt: `🎉 Ótimo! Pegue seus 6 posts personalizados aqui:\n${BRANDSIGNL_URL}/pilot\nDúvidas? É só responder aqui.`,
-        es: `🎉 ¡Genial! Obtén tus 6 posts personalizados aquí:\n${BRANDSIGNL_URL}/pilot\nPreguntas? Solo responde aquí.`,
+        en: `🎉 Great! Get your 6 posts here:\n${BRANDSIGNL_URL}/pilot\nAny questions? Just reply here.`,
+        pt: `🎉 Ótimo! Pegue seus 6 posts aqui:\n${BRANDSIGNL_URL}/pilot\nDúvidas? É só responder aqui.`,
+        es: `🎉 ¡Genial! Obtén tus 6 posts aquí:\n${BRANDSIGNL_URL}/pilot\nPreguntas? Solo responde aquí.`,
       };
       await sendMessage(from, upsell[lang]);
     } else {
@@ -249,7 +249,7 @@ async function handleMessage(from, text, pushName) {
   await sendMessage(from, GREETINGS[lang](pushName));
 }
 
-// ─── Routes ───────────────────────────────────
+// ─── Routes ──────────────────────────────────
 app.get('/', (req, res) => {
   console.log("ROOT HIT");
   res.status(200).send("BrandSignl WhatsApp Bot — running");
@@ -311,7 +311,7 @@ app.post('/reset/:phone', (req, res) => {
   res.json({ reset: phone });
 });
 
-// ─── Start ────────────────────────────────────
+// ─── Start ───────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
