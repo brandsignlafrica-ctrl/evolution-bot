@@ -1,44 +1,45 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const EVOLUTION_KEY = process.env.EVOLUTION_KEY;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
 const OPENAI_KEY = process.env.OPENAI_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Simple memory for conversation state
 const userStates = {};
 
-// FIXED: Evolution API send message - correct format
+const GREETINGS = {
+  en: "Hi! 👋 I'm the BrandSignl AI Bot.\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym",
+  pt: "Olá! 👋 Eu sou o Bot IA da BrandSignl.\n\nQue tipo de negócio você tem? Ex: salão, restaurante, academia"
+};
+
+// BULLETPROOF sendMessage for Evolution API
 async function sendMessage(to, text) {
-  // Safety: never send empty/undefined text
-  if (!text || typeof text!== 'string' || text.trim() === '') {
-    text = "Sorry, something went wrong. Please type 'hi' again.";
-  }
+  // Force to string, never undefined/null
+  text = String(text || "Sorry, type 'hi' again");
   
-  console.log('[Bot] Sending to WhatsApp:', text.substring(0, 60));
+  console.log('[Bot] Sending to WhatsApp:', text.substring(0, 50));
   
   try {
+    const payload = {
+      number: to,
+      textMessage: { 
+        text: text // Evolution API requires textMessage.text
+      }
+    };
+
     await axios.post(
       `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-      {
-        number: to,
-        textMessage: { text: text } // ← Evolution requires this exact structure
-      },
-      {
+      payload,
+      { 
         headers: { 
           apikey: EVOLUTION_KEY,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json' 
         }
       }
     );
@@ -48,7 +49,6 @@ async function sendMessage(to, text) {
   }
 }
 
-// Generate Instagram post with OpenAI
 async function generatePost(niche) {
   try {
     const response = await axios.post(
@@ -57,7 +57,7 @@ async function generatePost(niche) {
         model: 'gpt-4o-mini',
         messages: [{
           role: 'user',
-          content: `Create an engaging Instagram post caption for a ${niche} business. Include emojis, call to action, and 5-7 hashtags. Keep under 200 words.`
+          content: `Create an engaging Instagram post caption for a ${niche} business in South Africa. Include emojis, call to action, and 5-7 hashtags. Keep under 200 words.`
         }],
         max_tokens: 300
       },
@@ -71,17 +71,18 @@ async function generatePost(niche) {
     return response.data.choices[0].message.content;
   } catch (error) {
     console.error('OpenAI error:', error.response?.data || error.message);
-    return `🔥 Post idea for ${niche}!\n\nBoost your ${niche} business with amazing content!\n\nDM us to get started 🚀\n\n#${niche.replace(/\s/g, '')} #business #marketing #viral #growth`;
+    return `🔥 Post idea for ${niche}!\n\nBoost your ${niche} business today!\n\nDM us to get started 🚀\n\n#${niche.replace(/\s/g, '')} #business #marketing #viral #ZA`;
   }
 }
 
-// Webhook from Evolution API
+// Webhook endpoint for Evolution API
 app.post('/webhook', async (req, res) => {
   try {
     const data = req.body;
     console.log('[Webhook] Received event:', data.event);
     
     if (data.event!== 'messages.upsert') return res.sendStatus(200);
+    if (data.data.key.fromMe) return res.sendStatus(200);
     
     const message = data.data;
     const phone = message.key.remoteJid.split('@')[0];
@@ -92,15 +93,13 @@ app.post('/webhook', async (req, res) => {
     
     if (!text) return res.sendStatus(200);
     
-    // Initialize user state
     if (!userStates[phone]) {
-      userStates[phone] = { step: 'welcome', niche: null };
+      userStates[phone] = { step: 'welcome', niche: null, lang: 'en' };
     }
     
     const state = userStates[phone];
     console.log(`[Bot] Message from ${phone} | step=${state.step} | text="${text}"`);
     
-    // Bot logic
     if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello' || text.toLowerCase() === 'oi') {
       state.step = 'awaiting_niche';
       await sendMessage(phone, `Hi ${pushName}! 👋 Welcome to AI Content Bot!\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym, boutique`);
@@ -128,7 +127,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('Bot is running! ✅');
+  res.send('BrandSignl AI Bot is running! ✅');
 });
 
 app.listen(PORT, () => {
