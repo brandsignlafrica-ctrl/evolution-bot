@@ -39,10 +39,15 @@ function detectLang(text) {
 
 // ─── Send a WhatsApp text message via Evolution API ───────────────────────────
 async function sendWhatsApp(number, text) {
+  // FIX: Add @s.whatsapp.net if missing - Evolution v2 needs full JID
+  const jid = number.includes('@')? number : `${number}@s.whatsapp.net`;
   const url = `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
+
+  console.log('[Bot] Sending to:', jid, 'Text length:', String(text).length);
+
   await axios.post(
     url,
-    { number: number, text: String(text) },
+    { number: jid, text: String(text || "Hi!") },
     { headers: { apikey: EVOLUTION_KEY } }
   );
 }
@@ -61,7 +66,7 @@ async function generatePost(businessInput, lang) {
 function formatPost(signal, lang) {
   const hook = signal.hook || '';
   const caption = signal.caption || '';
-  const hashtags = Array.isArray(signal.hashtags) ? signal.hashtags.join(' ') : (signal.hashtags || '');
+  const hashtags = Array.isArray(signal.hashtags)? signal.hashtags.join(' ') : (signal.hashtags || '');
 
   if (lang === 'pt') {
     return `*${hook}*\n\n${caption}\n\n${hashtags}\n\n---\n_Quer mais posts como esse? Acesse brandsignl.com/pilot_`;
@@ -81,18 +86,18 @@ app.post('/webhook', async (req, res) => {
     const body = req.body;
 
     // Only handle incoming messages
-    if (body.event !== 'messages.upsert') return;
+    if (body.event!== 'messages.upsert') return;
 
     const key = body.data && body.data.key;
     const message = body.data && body.data.message;
 
-    if (!key || !message) return;
+    if (!key ||!message) return;
 
     // Skip messages sent BY the bot (fromMe = true)
     if (key.fromMe === true) return;
 
     const remoteJid = key.remoteJid || '';
-    // Strip @s.whatsapp.net or @g.us suffix
+    // Strip @s.whatsapp.net or @g.us suffix to get digits
     const from = remoteJid.split('@')[0];
 
     // Extract text from all common message types
@@ -103,7 +108,7 @@ app.post('/webhook', async (req, res) => {
       ''
     ).trim();
 
-    if (!from || !text) return;
+    if (!from ||!text) return;
 
     console.log('[Bot] From ' + from + ': ' + text);
 
@@ -115,7 +120,7 @@ app.post('/webhook', async (req, res) => {
       const signal = await generatePost(text, lang);
       reply = formatPost(signal, lang);
     } catch (genErr) {
-      console.error('[Bot] Generator error:', genErr.response ? genErr.response.data : genErr.message);
+      console.error('[Bot] Generator error:', genErr.response? genErr.response.data : genErr.message);
       // Fallback reply so the user always gets a response
       if (lang === 'pt') {
         reply = 'Oi! Tive um probleminha aqui. Me diz qual é o seu nicho (ex: manicure, cabelereiro, cílios) e eu te mando um post!';
@@ -130,7 +135,7 @@ app.post('/webhook', async (req, res) => {
     console.log('[Bot] Sent reply to ' + from);
 
   } catch (err) {
-    console.error('[Bot] Webhook error:', err.response ? err.response.data : err.message);
+    console.error('[Bot] Webhook error:', err.response? err.response.data : err.message);
   }
 });
 
