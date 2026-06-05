@@ -80,9 +80,11 @@ async function generatePost(businessInput, lang = 'en') {
   }
 }
 
-en: (name) => `Hi${name ? ' + name : ''}! 👋 I'm the BrandSignl assistant.\n\nI'll create a custom social media post for your business — *free*.\n\nWhat type of business do you have? (e.g. nail tech, hair stylist, lash tech, waxing, makeup artist)`,
-pt: (name) => `Oi${name ? ' + name : ''}! 👋 Sou o assistente BrandSignl.\n\nVou criar um post de redes sociais personalizado para o seu negócio — *grátis*.\n\nQual é o seu tipo de negócio? (ex: manicure, cabelereiro, cílios, depilação, maquiagem)`,
-es: (name) => `¡Hola${name ? ' + name : ''}! 👋 Soy el asistente BrandSignl.\n\nVoy a crear un post de redes sociales personalizado para tu negocio — *gratis*.\n\nQué tipo de negocio tienes? (ej: nail tech, estilista, pestañas, depilación, maquillaje)`
+const GREETINGS = {
+  en: (name) => `Hi! 👋 I'm the BrandSignl assistant.\n\nI'll create a custom social media post for your business — *free*.\n\nWhat type of business do you have? (e.g. nail tech, hair stylist, lash tech, waxing, makeup artist)`,
+  pt: (name) => `Oi! 👋 Sou o assistente BrandSignl.\n\nVou criar um post de redes sociais personalizado para o seu negócio — *grátis*.\n\nQual é o seu tipo de negócio? (ex: manicure, cabelereiro, cílios, depilação, maquiagem)`,
+  es: (name) => `¡Hola! 👋 Soy el asistente BrandSignl.\n\nVoy a crear un post de redes sociales personalizado para tu negocio — *gratis*.\n\nQué tipo de negocio tienes? (ej: nail tech, estilista, pestañas, depilación, maquillaje)`
+};
   es: (name) => `¡Hola${name? ' + name : ''}! 👋 Soy el asistente BrandSignl.\n\nVoy a crear un post de redes sociales personalizado para tu negocio — *gratis*.\n\nQué tipo de negocio tienes? (ej: nail tech, estilista, pestañas, depilación, maquillaje)`
 };
 
