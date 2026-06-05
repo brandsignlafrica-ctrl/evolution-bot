@@ -5,18 +5,18 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// === CONFIG - SET THESE IN RAILWAY VARIABLES ===
+// Use Railway variables exactly as named in your screenshot
 const PORT = process.env.PORT || 3000;
-const EVOLUTION_URL = process.env.EVOLUTION_URL; // https://evolution-bot-production.up.railway.app
-const EVOLUTION_KEY = process.env.EVOLUTION_KEY; // MASTER_API_KEY from Evolution
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE; // Brandsign1 Main V2
-// ===============================================
+const EVOLUTION_URL = process.env.EVOLUTION_URL;
+const EVOLUTION_KEY = process.env.EVOLUTION_KEY;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
+const WEBHOOK_TIMEOUT = parseInt(process.env.WEBHOOK_TIMEOUT) || 10000;
 
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
 
-    // Ignore non-message events to avoid 400 errors
+    // Skip contacts/chats/presence updates
     if (body.event!== 'messages.upsert') {
       return res.status(200).send('ok');
     }
@@ -31,24 +31,22 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`[Bot] Message from ${from} | text="${text}"`);
 
-    // === YOUR BOT LOGIC HERE ===
-    const replyText = `You said: ${text}`; // Replace this with your AI reply
-    // ===========================
+    // === YOUR REPLY LOGIC ===
+    // Replace this line with OpenAI call if you want
+    const replyText = `You said: ${text}`;
+    // ========================
 
-    // Send reply back to Evolution - FIX for 400 error
+    // Send back to Evolution - this fixes the 400 error
     await axios.post(
       `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
       {
-        number: from, // must be 27833272007 format, no @s.whatsapp.net
-        text: replyText, // must be string, never undefined
+        number: from,
+        text: String(replyText), // Force string to avoid 400
         options: { delay: 1000 }
       },
       {
-        headers: {
-          'apikey': EVOLUTION_KEY,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
+        headers: { 'apikey': EVOLUTION_KEY },
+        timeout: WEBHOOK_TIMEOUT
       }
     );
 
@@ -57,7 +55,7 @@ app.post('/webhook', async (req, res) => {
 
   } catch (err) {
     console.error('[Bot] Error:', err.response?.data || err.message);
-    res.status(200).send('ok'); // Return 200 so Evolution stops retrying
+    res.status(200).send('ok');
   }
 });
 
