@@ -58,6 +58,7 @@ app.post('/webhook', async (req, res) => {
     res.status(200).send('ok');
   }
 });
-
+app.get('/', (req, res) => res.status(200).send('ok'));
+app.listen(PORT, '0.0.0.0', () => console.log('Bot up on', PORT));
 app.get('/', (req, res) => res.send('Bot alive'));
 app.listen(PORT, () => console.log(`Bot running on ${PORT}`));
