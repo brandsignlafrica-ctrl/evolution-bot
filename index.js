@@ -13,23 +13,19 @@ const OPENAI_KEY = process.env.OPENAI_KEY;
 
 const userStates = {};
 
-const GREETINGS = {
-  en: "Hi! 👋 I'm the BrandSignl AI Bot.\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym",
-  pt: "Olá! 👋 Eu sou o Bot IA da BrandSignl.\n\nQue tipo de negócio você tem? Ex: salão, restaurante, academia"
-};
-
-// BULLETPROOF sendMessage for Evolution API
+// FIXED: Evolution API payload uses "text" directly
 async function sendMessage(to, text) {
-  // Force to string, never undefined/null
-  text = String(text || "Sorry, type 'hi' again");
+  text = String(text || "Type 'hi' again to start");
   
   console.log('[Bot] Sending to WhatsApp:', text.substring(0, 50));
   
   try {
     const payload = {
       number: to,
-      textMessage: { 
-        text: text // Evolution API requires textMessage.text
+      text: text, // <-- This is what your Evolution wants
+      options: {
+        delay: 1200,
+        presence: "composing"
       }
     };
 
@@ -75,11 +71,10 @@ async function generatePost(niche) {
   }
 }
 
-// Webhook endpoint for Evolution API
+// Webhook for Evolution API
 app.post('/webhook', async (req, res) => {
   try {
     const data = req.body;
-    console.log('[Webhook] Received event:', data.event);
     
     if (data.event!== 'messages.upsert') return res.sendStatus(200);
     if (data.data.key.fromMe) return res.sendStatus(200);
@@ -94,7 +89,7 @@ app.post('/webhook', async (req, res) => {
     if (!text) return res.sendStatus(200);
     
     if (!userStates[phone]) {
-      userStates[phone] = { step: 'welcome', niche: null, lang: 'en' };
+      userStates[phone] = { step: 'welcome', niche: null };
     }
     
     const state = userStates[phone];
@@ -102,7 +97,7 @@ app.post('/webhook', async (req, res) => {
     
     if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello' || text.toLowerCase() === 'oi') {
       state.step = 'awaiting_niche';
-      await sendMessage(phone, `Hi ${pushName}! 👋 Welcome to AI Content Bot!\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym, boutique`);
+      await sendMessage(phone, `Hi ${pushName}! 👋 Welcome to BrandSignl AI Bot!\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym, boutique`);
     }
     else if (state.step === 'awaiting_niche') {
       state.niche = text;
@@ -116,7 +111,7 @@ app.post('/webhook', async (req, res) => {
       state.step = 'awaiting_niche';
     }
     else {
-      await sendMessage(phone, `Type 'hi' to start! I can create Instagram posts for any business type.`);
+      await sendMessage(phone, `Type 'hi' to start! I create Instagram posts for any business type.`);
     }
     
     res.sendStatus(200);
@@ -127,9 +122,9 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('BrandSignl AI Bot is running! ✅');
+  res.send('BrandSignl WhatsApp Bot — running');
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`SERVER STARTED ON PORT ${PORT}`);
 });
