@@ -5,60 +5,50 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// Use Railway variables exactly as named in your screenshot
+// Use Railway's PORT - this fixes EADDRINUSE crash
 const PORT = process.env.PORT || 3000;
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const EVOLUTION_KEY = process.env.EVOLUTION_KEY;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
-const WEBHOOK_TIMEOUT = parseInt(process.env.WEBHOOK_TIMEOUT) || 10000;
 
 app.post('/webhook', async (req, res) => {
+  res.status(200).send('ok'); // Reply 200 fast so Evolution stops retrying
+  
   try {
     const body = req.body;
+    
+    // Skip non-message events
+    if (body.event!== 'messages.upsert') return;
 
-    // Skip contacts/chats/presence updates
-    if (body.event!== 'messages.upsert') {
-      return res.status(200).send('ok');
-    }
+    const from = body.data?.key?.remoteJid?.split('@')[0];
+    const text = body.data?.message?.conversation || body.data?.message?.extendedTextMessage?.text || '';
+    
+    if (!from ||!text) return;
 
-    const message = body.data?.message;
-    const from = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
-    const text = message?.conversation || message?.extendedTextMessage?.text || '';
+    console.log(`[Bot] From ${from}: ${text}`);
 
-    if (!from ||!text) {
-      return res.status(200).send('ok');
-    }
+    // === YOUR REPLY LOGIC HERE ===
+    const reply = `Echo: ${text}`; // Replace with OpenAI later
+    // ============================
 
-    console.log(`[Bot] Message from ${from} | text="${text}"`);
-
-    // === YOUR REPLY LOGIC ===
-    // Replace this line with OpenAI call if you want
-    const replyText = `You said: ${text}`;
-    // ========================
-
-    // Send back to Evolution - this fixes the 400 error
+    // Send reply - forces text to string to avoid 400 error
     await axios.post(
       `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-      {
-        number: from,
-        text: String(replyText), // Force string to avoid 400
-        options: { delay: 1000 }
+      { 
+        number: from, 
+        text: String(reply) 
       },
-      {
-        headers: { 'apikey': EVOLUTION_KEY },
-        timeout: WEBHOOK_TIMEOUT
-      }
+      { headers: { apikey: EVOLUTION_KEY }
     );
-
-    console.log(`[Bot] Reply sent to ${from}`);
-    res.status(200).send('ok');
-
-  } catch (err) {
-    console.error('[Bot] Error:', err.response?.data || err.message);
-    res.status(200).send('ok');
+    
+    console.log(`[Bot] Sent: ${reply}`);
+  } catch (e) {
+    console.error('[Bot] Fail:', e.response?.data || e.message);
   }
 });
+
+// Healthcheck for Railway
 app.get('/', (req, res) => res.status(200).send('ok'));
-app.listen(PORT, '0.0.0.0', () => console.log('Bot up on', PORT));
-app.get('/', (req, res) => res.send('Bot alive'));
-app.listen(PORT, () => console.log(`Bot running on ${PORT}`));
+
+// CRITICAL: Use PORT from Railway, no '0.0.0.0' - this fixes the crash
+app.listen(PORT, () => console.log('Bot up on', PORT));
