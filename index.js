@@ -19,21 +19,21 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // Simple memory for conversation state
 const userStates = {};
 
-// Evolution API send message - FIXED FORMAT
-async function sendMessage(phone, text) {
-  // Safety check: never send empty text
-  if (!text || text.trim() === '') {
+// FIXED: Evolution API send message - correct format
+async function sendMessage(to, text) {
+  // Safety: never send empty/undefined text
+  if (!text || typeof text!== 'string' || text.trim() === '') {
     text = "Sorry, something went wrong. Please type 'hi' again.";
   }
   
-  console.log('Sending to WhatsApp:', text);
+  console.log('[Bot] Sending to WhatsApp:', text.substring(0, 60));
   
   try {
     await axios.post(
       `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
       {
-        number: phone,
-        textMessage: { text: text } // ← Evolution needs this exact format
+        number: to,
+        textMessage: { text: text } // ← Evolution requires this exact structure
       },
       {
         headers: { 
@@ -42,7 +42,7 @@ async function sendMessage(phone, text) {
         }
       }
     );
-    console.log('[Bot] Message sent successfully');
+    console.log('[Bot] Message sent OK');
   } catch (error) {
     console.error('[Bot] sendMessage failed:', error.response?.data || error.message);
   }
@@ -57,7 +57,7 @@ async function generatePost(niche) {
         model: 'gpt-4o-mini',
         messages: [{
           role: 'user',
-          content: `Create an engaging Instagram post for a ${niche} business. Include caption with emojis, 5-7 hashtags, and call to action.`
+          content: `Create an engaging Instagram post caption for a ${niche} business. Include emojis, call to action, and 5-7 hashtags. Keep under 200 words.`
         }],
         max_tokens: 300
       },
@@ -71,7 +71,7 @@ async function generatePost(niche) {
     return response.data.choices[0].message.content;
   } catch (error) {
     console.error('OpenAI error:', error.response?.data || error.message);
-    return `🔥 New post idea for ${niche}!\n\nBoost your ${niche} business with amazing content!\n\nDM us to get started 🚀\n\n#${niche} #business #marketing #growth #viral`;
+    return `🔥 Post idea for ${niche}!\n\nBoost your ${niche} business with amazing content!\n\nDM us to get started 🚀\n\n#${niche.replace(/\s/g, '')} #business #marketing #viral #growth`;
   }
 }
 
@@ -90,6 +90,8 @@ app.post('/webhook', async (req, res) => {
     
     console.log(`[Webhook] Processing: from=${phone} pushName="${pushName}" text="${text}"`);
     
+    if (!text) return res.sendStatus(200);
+    
     // Initialize user state
     if (!userStates[phone]) {
       userStates[phone] = { step: 'welcome', niche: null };
@@ -99,7 +101,7 @@ app.post('/webhook', async (req, res) => {
     console.log(`[Bot] Message from ${phone} | step=${state.step} | text="${text}"`);
     
     // Bot logic
-    if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello') {
+    if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello' || text.toLowerCase() === 'oi') {
       state.step = 'awaiting_niche';
       await sendMessage(phone, `Hi ${pushName}! 👋 Welcome to AI Content Bot!\n\nWhat type of business do you have? Ex: nail salon, restaurant, gym, boutique`);
     }
@@ -121,7 +123,7 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
   } catch (error) {
     console.error('Webhook error:', error);
-    res.sendStatus(500);
+    res.sendStatus(200);
   }
 });
 
