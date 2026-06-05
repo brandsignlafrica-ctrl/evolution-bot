@@ -1,11 +1,5 @@
 'use strict';
 
-/**
- * BrandSignl WhatsApp Bot — Stage 1
- * Fixed: sendMessage uses 'text' field for Evolution API v2
- * Fixed: GREETINGS syntax error
- */
-
 const express = require('express');
 const app = express();
 
@@ -14,17 +8,14 @@ app.use(express.urlencoded({ extended: true }));
 
 console.log("ENTRY FILE IS EXECUTING");
 
-// ─── Config ──────────────────────────────────
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL || '';
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'brandsignl';
 const BRANDSIGNL_URL = process.env.BRANDSIGNL_URL || 'https://brandsignl.com';
 const OWNER_NUMBER = process.env.BOT_OWNER_NUMBER || '';
 
-// ─── In-memory session store ─────────────────
 const sessions = new Map();
 
-// ─── Niche keyword detection ─────────────────
 function detectNiche(text) {
   const t = text.toLowerCase();
   if (/nail|unha|acr[iy]l|gel|manicur/.test(t)) return 'nails';
@@ -35,7 +26,6 @@ function detectNiche(text) {
   return null;
 }
 
-// ─── Language detection ──────────────────────
 function detectLang(text) {
   const t = text.toLowerCase();
   if (/\b(oi|olá|ola|obrigad|quero|meu|minha|não|sim|agenda|clientes)\b/.test(t)) return 'pt';
@@ -43,7 +33,6 @@ function detectLang(text) {
   return 'en';
 }
 
-// ─── Evolution API helpers ───────────────────
 async function sendMessage(to, text) {
   if (!EVOLUTION_URL ||!EVOLUTION_KEY) {
     console.warn('[Bot] EVOLUTION_API_URL or EVOLUTION_API_KEY not set — skipping send');
@@ -71,7 +60,6 @@ async function sendMessage(to, text) {
   }
 }
 
-// ─── BrandSignl generator API call ───────────
 async function generatePost(businessInput, lang = 'en') {
   const url = `${BRANDSIGNL_URL}/api/wa-generate`;
   try {
@@ -92,7 +80,6 @@ async function generatePost(businessInput, lang = 'en') {
   }
 }
 
-// ─── Conversation flow ───────────────────────
 const GREETINGS = {
   en: (name) => `Hi${name? ' + name : ''}! 👋 I'm the BrandSignl assistant.\n\nI'll create a custom social media post for your business — *free*.\n\nWhat type of business do you have? (e.g. nail tech, hair stylist, lash tech, waxing, makeup artist)`,
   pt: (name) => `Oi${name? ' + name : ''}! 👋 Sou o assistente BrandSignl.\n\nVou criar um post de redes sociais personalizado para o seu negócio — *grátis*.\n\nQual é o seu tipo de negócio? (ex: manicure, cabelereiro, cílios, depilação, maquiagem)`,
@@ -123,7 +110,6 @@ const RESULT_FOOTER = {
   es: '\n\n📲 ¿Quieres 6 posts así? Responde *SÍ* o visita: ' + BRANDSIGNL_URL + '/pilot',
 };
 
-// ─── Manual override ─────────────────────────
 function checkOwnerCommand(from, text) {
   if (from!== OWNER_NUMBER && from!== OWNER_NUMBER + '@s.whatsapp.net') return false;
   const match = text.match(/^PAUSA\s+(\d+)/i);
@@ -145,14 +131,11 @@ function checkOwnerCommand(from, text) {
   return false;
 }
 
-// ─── Main message handler ────────────────────
 async function handleMessage(from, text, pushName) {
   const phone = from.replace('@s.whatsapp.net', '').replace(/\D/g, '');
-
   if (checkOwnerCommand(phone, text)) return;
 
   const session = sessions.get(phone) || { step: 'welcome', lang: 'en' };
-
   if (session.paused) {
     console.log('[Bot] Session paused for:', phone, '— skipping auto-reply');
     return;
@@ -190,7 +173,6 @@ async function handleMessage(from, text, pushName) {
     sessions.set(phone, session);
 
     await sendMessage(from, GENERATING[lang]);
-
     const post = await generatePost(session.businessInput, lang);
 
     if (!post ||!post.caption) {
@@ -213,7 +195,6 @@ async function handleMessage(from, text, pushName) {
 
     session.step = 'delivered';
     sessions.set(phone, session);
-
     await sendMessage(from, reply);
 
     if (OWNER_NUMBER) {
@@ -249,7 +230,6 @@ async function handleMessage(from, text, pushName) {
   await sendMessage(from, GREETINGS[lang](pushName));
 }
 
-// ─── Routes ──────────────────────────────────
 app.get('/', (req, res) => {
   console.log("ROOT HIT");
   res.status(200).send("BrandSignl WhatsApp Bot — running");
@@ -262,15 +242,12 @@ app.get('/health', (req, res) => {
 
 app.post('/webhook', async (req, res) => {
   res.status(200).json({ received: true });
-
   try {
     const body = req.body;
     console.log('[Webhook] Received event:', body?.event, '| instance:', body?.instance);
-
     if (body?.event!== 'messages.upsert') return;
 
     const messages = body?.data?.messages || (body?.data? [body.data] : []);
-
     for (const msg of messages) {
       if (msg?.key?.fromMe) continue;
       const from = msg?.key?.remoteJid || '';
@@ -283,11 +260,8 @@ app.post('/webhook', async (req, res) => {
         '';
 
       if (!text.trim()) continue;
-
       const pushName = msg?.pushName || '';
-
       console.log(`[Webhook] Processing: from=${from} pushName="${pushName}" text="${text.slice(0, 80)}"`);
-
       handleMessage(from, text, pushName).catch(err => {
         console.error('[Bot] handleMessage error:', err.message);
       });
@@ -311,9 +285,7 @@ app.post('/reset/:phone', (req, res) => {
   res.json({ reset: phone });
 });
 
-// ─── Start ───────────────────────────────────
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`SERVER STARTED ON PORT ${PORT}`);
   console.log(`Evolution instance: ${EVOLUTION_INSTANCE}`);
