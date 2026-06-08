@@ -28,6 +28,8 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     }
 
     const endpoint = validImageUrl ? 'message/sendMedia' : 'message/sendText';
+    
+    // Hard fixed string concatenation to prevent loader crashes
     const url = EVOLUTION_API_URL + '/' + endpoint + '/' + EVOLUTION_INSTANCE;
     
     const payload = validImageUrl ? {
@@ -48,7 +50,7 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     });
     return response.data;
   } catch (err) {
-    console.error('[Bot Dispatch Error]:', err.message);
+    console.error('Bot Dispatch Error: ' + err.message);
     return null;
   }
 }
@@ -60,7 +62,7 @@ async function syncLeadState(phone, updates = {}) {
     const res = await axios.post(url, { phone, ...updates }, { timeout: 10000 });
     return res.data;
   } catch (err) {
-    console.error('[Backend API Sync Error]:', err.message);
+    console.error('Backend API Sync Error: ' + err.message);
     return null;
   }
 }
@@ -74,7 +76,7 @@ async function getLivePreview(niche, brandName, brandPhone) {
     });
     return res.data;
   } catch (err) {
-    console.error('[Backend API Preview Error]:', err.message);
+    console.error('Backend API Preview Error: ' + err.message);
     return null;
   }
 }
@@ -111,7 +113,7 @@ app.post('/webhook', async (req, res) => {
       return; 
     }
 
-    console.log('[Engine Test Execution] Running sequence for ' + from + ': ' + text);
+    console.log('Engine Test Execution: Processing text for sender ' + from);
 
     let stateData = await syncLeadState(from);
     let currentStep = stateData && stateData.lead ? stateData.lead.step : 'new';
@@ -165,7 +167,10 @@ app.post('/webhook', async (req, res) => {
       let remoteImgUrl = null;
 
       if (previewAsset) {
-        const titleHook = previewAsset.hook ? '' + previewAsset.hook + ' \n\n' : '';
+        let titleHook = '';
+        if (previewAsset.hook) {
+          titleHook = '' + previewAsset.hook + ' \n\n';
+        }
         const bodyMsg = previewAsset.caption || '';
         imageCaption = titleHook + bodyMsg;
         remoteImgUrl = previewAsset.imageUrl || null;
@@ -201,13 +206,13 @@ app.post('/webhook', async (req, res) => {
     }
 
   } catch (err) {
-    console.error('[Webhook Loop Error]:', err.message);
+    console.error('Webhook Loop Error: ' + err.message);
   }
 });
 
 app.use((req, res) => res.status(404).send('Not found'));
 
-process.on('uncaughtException', (err) => console.error('[Bot Global Exception]:', err.message));
-process.on('unhandledRejection', (reason) => console.error('[Bot Global Rejection]:', reason));
+process.on('uncaughtException', (err) => console.error('Bot Global Exception: ' + err.message));
+process.on('unhandledRejection', (reason) => console.error('Bot Global Rejection: ' + reason));
 
 app.listen(PORT, '0.0.0.0', () => console.log('SERVER READY ON PORT ' + PORT));
