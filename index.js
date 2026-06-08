@@ -12,39 +12,18 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-console.log('ENTRY FILE EXECUTING — STATE ENGINE READY');
-console.log('PORT:', PORT);
-console.log('EVOLUTION_API_URL:', EVOLUTION_API_URL);
-console.log('EVOLUTION_INSTANCE:', EVOLUTION_INSTANCE);
-console.log('BRANDSIGNL_URL:', BRANDSIGNL_URL);
+console.log('ENTRY FILE EXECUTING — NEW STEP ENGINE ACTIVE');
 
 // ─── Health endpoints ─────────────────────────────────────────────────────────
-app.get('/', (req, res) => res.status(200).send('BrandSignl State Engine — OK'));
+app.get('/', (req, res) => res.status(200).send('BrandSignl Micro-Funnel — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
-// ─── Language detection ───────────────────────────────────────────────────────
-function detectLang(text) {
-  const pt = /\b(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad|quero|preciso|meu|minha|como|você|voce|por favor|ajuda|cabelo|unhas|cílios|sobrancelha|manicure|manicura)\b/i;
-  const es = /\b(hola|buenos días|buenas|gracias|quiero|necesito|mi|como|usted|por favor|ayuda|cabello|uñas|pestañas)\b/i;
-  if (pt.test(text)) return 'pt';
-  if (es.test(text)) return 'es';
-  return 'en';
-}
-
-// ─── Send WhatsApp message via Evolution API (With Protocol Sanitizer) ───────
+// ─── Send WhatsApp message via Evolution API ──────────────────────────────────
 async function sendWhatsApp(number, text, imageUrl = null) {
   let validImageUrl = (imageUrl && String(imageUrl).trim() !== '') ? String(imageUrl).trim() : null;
   
-  // 🧼 PROTOCOL SANITIZER: If the URL is broken, relative, or contains "null:", fix it instantly
-  if (validImageUrl) {
-    if (validImageUrl.startsWith('null') || validImageUrl.includes('null:')) {
-      // Strip out the broken null prefix and re-attach the clean website domain base
-      const cleanPath = validImageUrl.replace(/^null:?/, '').replace(/^\/+/, '');
-      validImageUrl = ${BRANDSIGNL_URL}/${cleanPath};
-    } else if (!validImageUrl.startsWith('http://') && !validImageUrl.startsWith('https://')) {
-      // If it's a relative path (e.g. /uploads/image.png), append the base website URL
-      validImageUrl = ${BRANDSIGNL_URL}/${validImageUrl.replace(/^\/+/, '')};
-    }
+  if (validImageUrl && validImageUrl.includes('.comnull/')) {
+    validImageUrl = validImageUrl.replace('.comnull/', '.com/');
   }
 
   const endpoint = validImageUrl ? 'message/sendMedia' : 'message/sendText';
@@ -62,7 +41,6 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     text: String(text)
   };
 
-  console.log([Bot] Dispatching to ${endpoint}. Final verified image URL: ${validImageUrl});
   const response = await axios.post(url, payload, {
     headers: { apikey: EVOLUTION_API_KEY },
     timeout: 15000
@@ -70,21 +48,25 @@ async function sendWhatsApp(number, text, imageUrl = null) {
   return response.data;
 }
 
-// ─── Backend Pipeline Integration Helpers (Manus REST Endpoints) ─────────────
+// ─── Backend Pipeline Integration Helpers ─────────────────────────────────────
 async function syncLeadState(phone, updates = {}) {
   try {
     const res = await axios.post(${BRANDSIGNL_URL}/api/wa-lead, { phone, ...updates }, { timeout: 10000 });
     return res.data;
   } catch (err) {
-    console.error('[Backend API] Lead Sync Error:', err.message);
+    console.error('[Backend API] State Sync Error:', err.message);
     return null;
   }
 }
 
-async function getLivePreview(niche, lang) {
+async function getLivePreview(niche, brandName, brandPhone) {
   try {
     const res = await axios.get(${BRANDSIGNL_URL}/api/wa-preview, {
-      params: { niche, lang },
+      params: { 
+        niche: niche,
+        businessName: brandName,
+        businessPhone: brandPhone
+      },
       timeout: 15000
     });
     return res.data;
@@ -92,16 +74,6 @@ async function getLivePreview(niche, lang) {
     console.error('[Backend API] Preview Fetch Error:', err.message);
     return null;
   }
-}
-
-// ─── Sales Funnel Copy Templates ─────────────────────────────────────────────
-function buildEducationalLesson(lang) {
-  if (lang === 'pt') {
-    return \n\n---\n💡 *Lição de Redes Sociais:* Postar fotos normais do salão traz visualizações, mas NÃO traz clientes. O algoritmo fica confuso. Nosso Pacote de 6 Posts usa layouts de "intenção de compra" para forçar a Meta a entender que sua página significa agendamentos!\n\n +
-           👉 *Garanta seus 6 posts por apenas R$30 no Pix:* https://pay.hotmart.com/W105949535S;
-  }
-  return \n\n---\n💡 *The Social Media Lesson:* Posting standard salon pictures gets views, but NO calls. Meta gets confused and thinks you want to be an influencer. Our 6-Post Pack uses strict "buyer-intent" layouts to force the algorithm to realize your page means appointments!\n\n +
-         👉 *Secure your 6-post package via PayFast for R99 once-off:* https://brandsignl.com/nails/confirm;
 }
 
 // ─── Main Webhook Endpoint ────────────────────────────────────────────────────
@@ -120,7 +92,6 @@ app.post('/webhook', async (req, res) => {
     if (remoteJid.endsWith('@g.us')) return;
 
     const from = remoteJid.split('@')[0].replace(/\D/g, '').trim();
-
     const text = (
       (data.message.conversation) ||
       (data.message.extendedTextMessage && data.message.extendedTextMessage.text) ||
@@ -131,57 +102,102 @@ app.post('/webhook', async (req, res) => {
 
     if (!from || !text) return;
 
-    // 🔒 BULLETPROOF TESTING LOCKDOWN GUARD
+    // 🔒 TESTING LOCKDOWN GUARD
     const ALLOWED_TESTER = '27833272007'; 
-    
-    if (from !== ALLOWED_TESTER) {
-      console.log([Webhook] Shield Active: Ignored real customer (${from}) to let Meta AI run safely.);
-      return;
-    }
+    if (from !== ALLOWED_TESTER) return;
 
-    console.log([State Engine] Test interaction allowed for ${from}: "${text}");
-    const lang = detectLang(text);
+    console.log([Micro-Funnel] Incoming test message from ${from}: "${text}");
 
-    // Sync with database to fetch the customer's current conversational state
+    // Fetch or start their step tracking history
     let stateData = await syncLeadState(from);
     let currentStep = stateData && stateData.lead ? stateData.lead.step : 'new';
     
-    console.log([State Engine] User current database step is: [${currentStep}]);
+    // Reset trigger to easily re-test the sequence anytime
+    if (text.toLowerCase() === 'reset' || text.toLowerCase() === 'nails' || text.toLowerCase() === 'unhas') {
+      currentStep = 'new';
+    }
 
-    // Run Conversational State Machine Flow
-    if (currentStep === 'new' || text.toLowerCase() === 'nails' || text.toLowerCase() === 'unhas') {
-      // Force status update to fetch live preview assets
-      await syncLeadState(from, { niche: text, step: 'niche_pending' });
+    // ─── STEP FLOW MACHINE ───────────────────────────────────────────────────
+    
+    if (currentStep === 'new') {
+      await syncLeadState(from, { step: 'qualify_pending' });
+      await sendWhatsApp(from, "Are you a beauty professional looking for more clients?\n\n1. Yes, looking for clients\n2. Just browsing");
+    }
+    
+    else if (currentStep === 'qualify_pending') {
+      if (text === '2') {
+        await sendWhatsApp(from, "No problem! Let us know if you change your mind later.");
+        await syncLeadState(from, { step: 'new' });
+      } else {
+        await syncLeadState(from, { step: 'niche_pending' });
+        await sendWhatsApp(from, "Great! What is your niche?\n\n1. Nails\n2. Hair\n3. Lashes");
+      }
+    }
+    
+    else if (currentStep === 'niche_pending') {
+      let selectedNiche = 'nails';
+      if (text === '2') selectedNiche = 'hair';
+      if (text === '3') selectedNiche = 'lashes';
+
+      // Save niche and bump state to collect brand names
+      await syncLeadState(from, { niche: selectedNiche, step: 'branding_pending' });
+      await sendWhatsApp(from, "To generate your custom sample, what is your Business Name and Contact Number?\n\nReply in this format: Salon Name, Phone Number");
+    }
+    
+    else if (currentStep === 'branding_pending') {
+      // Split the text comma to capture name vs phone
+      const parts = text.split(',');
+      const bizName = parts[0] ? parts[0].trim() : "My Salon";
+      const bizPhone = parts[1] ? parts[1].trim() : from;
+
+      await sendWhatsApp(from, "Generating your custom branded preview post now... ⚡");
+
+      // Pull current niche tag stored in DB
+      const storedNiche = stateData && stateData.lead ? stateData.lead.niche : 'nails';
       
-      const previewAsset = await getLivePreview(text, lang);
+      // Request custom branded preview image block from backend
+      const previewAsset = await getLivePreview(storedNiche, bizName, bizPhone);
       
-      let replyMessage = '';
+      let replyMessage = "Here is your branded sample post layout!";
       let targetImageUrl = null;
 
       if (previewAsset) {
         const hook = previewAsset.hook ? *${previewAsset.hook}*\n\n : '';
         const caption = previewAsset.caption || '';
-        const tags = previewAsset.hashtags ? \n\n${previewAsset.hashtags} : '';
-        
-        replyMessage = ${hook}${caption}${tags}${buildEducationalLesson(lang)};
+        replyMessage = ${hook}${caption};
         targetImageUrl = previewAsset.imageUrl || null;
-      } else {
-        replyMessage = lang === 'pt' 
-          ? Montando seus exemplos para o nicho "${text}"... ✨ + buildEducationalLesson(lang)
-          : Creating sample layouts for the "${text}" niche... ✨ + buildEducationalLesson(lang);
       }
 
+      // Send image with short caption
       await sendWhatsApp(from, replyMessage, targetImageUrl);
+      
+      // Follow up with option gate
+      await sendWhatsApp(from, "Are you happy with this post?\n\n1. Yes\n2. No");
+      await syncLeadState(from, { step: 'satisfaction_pending' });
+    }
+    
+    else if (currentStep === 'satisfaction_pending') {
+      await syncLeadState(from, { step: 'package_pending' });
+      await sendWhatsApp(from, "Awesome! Do you want a 6-Post Pack or a 20-Post Pack?\n\n1. 6 Posts (R99)\n2. 20 Posts (R249)");
+    }
+    
+    else if (currentStep === 'package_pending') {
+      let checkoutLink = "https://brandsignl.com/nails/confirm"; // Default 6 pack link
+      let selectedPack = "6 Posts";
+      
+      if (text === '2') {
+        checkoutLink = "https://brandsignl.com/nails/premium-bundle"; // 20 pack link
+        selectedPack = "20 Posts";
+      }
+
+      let paymentMessage = Perfect! Your layout package for ${selectedPack} is reserved.\n\n👉 Complete your secure PayFast checkout here:\n${checkoutLink};
+      
+      await sendWhatsApp(from, paymentMessage);
       await syncLeadState(from, { step: 'awaiting_payment' });
-      console.log([State Engine] Flow completed. Updated state to: [awaiting_payment]);
-    } 
+    }
+    
     else if (currentStep === 'awaiting_payment') {
-      let ongoingReply = lang === 'pt'
-        ? Seu pacote de layouts de alta conversão está reservado!\n\nAssim que o Pix for confirmado, nosso sistema envia seu link de acesso exclusivo instantaneamente aqui no chat.
-        : Your buyer-intent pack layouts are reserved!\n\nAs soon as payment completes via PayFast, our delivery system drops your personal access link directly into this chat thread.;
-        
-      await sendWhatsApp(from, ongoingReply);
-      console.log([State Engine] Retained user inside payment loop.);
+      await sendWhatsApp(from, "Your order is securely reserved. Once payment is completed, your final package download page link drops right here.");
     }
 
   } catch (err) {
