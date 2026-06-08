@@ -38,52 +38,82 @@ function detectLang(text) {
   return 'en';
 }
 
-// ─── Send WhatsApp message via Evolution API ──────────────────────────────────
-async function sendWhatsApp(number, text) {
-  const url = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
-  const response = await axios.post(
-    url,
-    { number: number, text: String(text) },
-    {
-      headers: { apikey: EVOLUTION_API_KEY },
-      timeout: 15000
+// ─── Send WhatsApp message via Evolution API (Handles Text or Images) ────────
+async function sendWhatsApp(number, text, imageUrl = null) {
+  // If an imageUrl exists, route to sendMedia; otherwise, fall back to sendText
+  const endpoint = imageUrl ? 'message/sendMedia' : 'message/sendText';
+  const url = ${EVOLUTION_API_URL}/${endpoint}/${EVOLUTION_INSTANCE};
+  
+  const payload = imageUrl ? {
+    number: number,
+    mediaMessage: {
+      mediatype: 'image',
+      caption: String(text),
+      media: imageUrl
     }
-  );
+  } : {
+    number: number,
+    text: String(text)
+  };
+
+  console.log([Bot] Dispatching payload to ${endpoint} via URL: ${url});
+  const response = await axios.post(url, payload, {
+    headers: { apikey: EVOLUTION_API_KEY },
+    timeout: 15000
+  });
   return response.data;
 }
 
 // ─── Call BrandSignl post generator ──────────────────────────────────────────
 async function generatePost(businessInput, lang) {
   const response = await axios.post(
-    `${BRANDSIGNL_URL}/api/wa-generate`,
+    ${BRANDSIGNL_URL}/api/wa-generate,
     { businessInput: businessInput, lang: lang },
     { timeout: 30000 }
   );
   return response.data;
 }
 
-// ─── Format generated post for WhatsApp ──────────────────────────────────────
+// ─── Format generated post with Educational Sales Lesson ────────────────────
 function formatPost(signal, lang) {
-  const hook = signal.hook || '';
-  const caption = signal.caption || '';
-  const hashtags = Array.isArray(signal.hashtags)
-    ? signal.hashtags.join(' ')
-    : (signal.hashtags || '');
+  let captionText = '';
+  
+  // Safe extraction strategy to completely eliminate "undefined" errors
+  if (typeof signal === 'string') {
+    captionText = signal;
+  } else if (signal) {
+    captionText = signal.caption || signal.text || signal.content || signal.output || '';
+    if (signal.hook) {
+      captionText = *${signal.hook}*\n\n${captionText};
+    }
+    if (signal.hashtags) {
+      const tags = Array.isArray(signal.hashtags) ? signal.hashtags.join(' ') : signal.hashtags;
+      captionText = ${captionText}\n\n${tags};
+    }
+  }
 
-  const cta = {
-    pt: '_Quer mais posts? Acesse brandsignl.com/pilot_',
-    es: '_¿Quieres más posts? Visita brandsignl.com/pilot_',
-    en: '_Want more posts? Visit brandsignl.com/pilot_'
-  };
+  // Inject the exact educational lesson + conversion funnel links
+  if (lang === 'pt') {
+    return ${captionText}\n\n---\n +
+           💡 *Lição de Redes Sociais:* Postar fotos normais do salão traz visualizações, mas NÃO traz clientes. O algoritmo da Meta fica confuso e acha que você quer ser influenciadora. Nosso Pacote de 6 Posts usa layouts de "intenção de compra" para treinar a Meta e trazer agendamentos!\n\n +
+           👉 *Garanta seus 6 posts por apenas R$30 no Pix:* https://pay.hotmart.com/W105949535S;
+  }
 
-  return `*${hook}*\n\n${caption}\n\n${hashtags}\n\n---\n${cta[lang] || cta.en}`;
+  return ${captionText}\n\n---\n +
+         💡 *The Social Media Lesson:* Posting standard salon pictures gets views, but NO calls. Meta gets confused and thinks you want to be an influencer. Our 6-Post Pack uses strict "buyer-intent" layouts to force the algorithm to realize your page means appointments!\n\n +
+         👉 *Secure your 6-post package via PayFast for R99 once-off:* https://brandsignl.com/nails/confirm;
 }
 
 // ─── Fallback reply when generator fails ─────────────────────────────────────
 function fallbackReply(lang) {
-  if (lang === 'pt') return 'Oi! Me diz qual é o seu nicho (ex: manicure, cabelereiro, cílios) e eu te mando um post!';
-  if (lang === 'es') return '¡Hola! Dime tu nicho (ej: manicura, peluquería, pestañas) y te envío un post.';
-  return "Hey! Tell me your niche (e.g. nail tech, hair stylist, lashes) and I'll send you a post!";
+  if (lang === 'pt') {
+    return Oi! Me diz qual é o seu nicho (ex: manicure, cílios) para eu gerar seu post!\n\n +
+           💡 Fotos comuns trazem curtidas, mas não trazem clientes. Quer pular os testes e pegar os 6 layouts de alta conversão direto no Pix?\n +
+           👉 Acesse: https://pay.hotmart.com/W105949535S;
+  }
+  return Hey! Tell me your niche (e.g. nail tech, lashes) so I can generate your post!\n\n +
+         💡 Quick Tip: Casual images get likes, but no calls. Want to skip the testing phase and get the 6 specific layouts that bring direct bookings?\n +
+         👉 Get them here for R99: https://brandsignl.com/nails/confirm;
 }
 
 // ─── Main webhook endpoint ────────────────────────────────────────────────────
@@ -132,15 +162,31 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
-    console.log('[Bot] From ' + from + ': ' + text);
+    // 🔒 TESTING LOCKDOWN GUARD
+    // Configured to completely isolate testing to your private mobile number
+    const ALLOWED_TESTER = '27833272007'; 
+    if (from !== ALLOWED_TESTER) {
+      console.log([Webhook] Ignored message from production user (${from}) to avoid disrupting Meta AI.);
+      return;
+    }
+
+    console.log('[Bot] PROCESSED TEST RUN from ' + from + ': ' + text);
 
     const lang = detectLang(text);
     console.log('[Bot] Detected language:', lang);
 
     let reply;
+    let targetImageUrl = null;
+    
     try {
       const signal = await generatePost(text, lang);
       reply = formatPost(signal, lang);
+      
+      // Check if Pilot's API passes back a valid sample image asset URL inside the JSON
+      if (signal && signal.imageUrl) {
+        targetImageUrl = signal.imageUrl;
+      }
+      
       console.log('[Bot] Post generated successfully');
     } catch (genErr) {
       const errMsg = genErr.response ? JSON.stringify(genErr.response.data) : genErr.message;
@@ -148,13 +194,12 @@ app.post('/webhook', async (req, res) => {
       reply = fallbackReply(lang);
     }
 
-    await sendWhatsApp(from, reply);
+    await sendWhatsApp(from, reply, targetImageUrl);
     console.log('[Bot] Reply sent to ' + from);
 
   } catch (err) {
-    const errMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+    const errMsg = err.response ? JSON.stringify(genErr.response.data) : err.message;
     console.error('[Bot] Webhook processing error:', errMsg);
-    // Do NOT re-throw — server must stay alive
   }
 });
 
