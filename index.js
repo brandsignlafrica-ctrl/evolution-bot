@@ -28,7 +28,7 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     }
 
     const endpoint = validImageUrl ? 'message/sendMedia' : 'message/sendText';
-    const url = ${EVOLUTION_API_URL}/${endpoint}/${EVOLUTION_INSTANCE};
+    const url = EVOLUTION_API_URL + '/' + endpoint + '/' + EVOLUTION_INSTANCE;
     
     const payload = validImageUrl ? {
       number: number,
@@ -56,7 +56,8 @@ async function sendWhatsApp(number, text, imageUrl = null) {
 // ─── Backend API Connectors ───────────────────────────────────────────────────
 async function syncLeadState(phone, updates = {}) {
   try {
-    const res = await axios.post(${BRANDSIGNL_URL}/api/wa-lead, { phone, ...updates }, { timeout: 10000 });
+    const url = BRANDSIGNL_URL + '/api/wa-lead';
+    const res = await axios.post(url, { phone, ...updates }, { timeout: 10000 });
     return res.data;
   } catch (err) {
     console.error('[Backend API Sync Error]:', err.message);
@@ -66,7 +67,8 @@ async function syncLeadState(phone, updates = {}) {
 
 async function getLivePreview(niche, brandName, brandPhone) {
   try {
-    const res = await axios.get(${BRANDSIGNL_URL}/api/wa-preview, {
+    const url = BRANDSIGNL_URL + '/api/wa-preview';
+    const res = await axios.get(url, {
       params: { niche, businessName: brandName, businessPhone: brandPhone },
       timeout: 15000
     });
@@ -109,7 +111,7 @@ app.post('/webhook', async (req, res) => {
       return; 
     }
 
-    console.log([Engine Test Execution] Running sequence for ${from}: "${text}");
+    console.log('[Engine Test Execution] Running sequence for ' + from + ': ' + text);
 
     let stateData = await syncLeadState(from);
     let currentStep = stateData && stateData.lead ? stateData.lead.step : 'new';
@@ -163,9 +165,9 @@ app.post('/webhook', async (req, res) => {
       let remoteImgUrl = null;
 
       if (previewAsset) {
-        const titleHook = previewAsset.hook ? *${previewAsset.hook}*\n\n : '';
+        const titleHook = previewAsset.hook ? '' + previewAsset.hook + ' \n\n' : '';
         const bodyMsg = previewAsset.caption || '';
-        imageCaption = ${titleHook}${bodyMsg};
+        imageCaption = titleHook + bodyMsg;
         remoteImgUrl = previewAsset.imageUrl || null;
       }
 
@@ -189,10 +191,11 @@ app.post('/webhook', async (req, res) => {
         chosenLabel = "20 Posts";
       }
 
-      await sendWhatsApp(from, Perfect! Your package for ${chosenLabel} is reserved.\n\n👉 Complete checkout here:\n${linkTarget});
+      await sendWhatsApp(from, "Perfect! Your package for " + chosenLabel + " is reserved.\n\n👉 Complete checkout here:\n" + linkTarget);
       await syncLeadState(from, { step: 'awaiting_payment' });
     }
     
+    // Fallback Loop Protection
     else if (currentStep === 'awaiting_payment') {
       await sendWhatsApp(from, "Your order is securely reserved. Once checkout completes, your layout link drops here.");
     }
