@@ -103,10 +103,10 @@ app.post('/webhook', async (req, res) => {
 
     if (!from || !text) return;
 
-    // 🔒 STRICT INBOUND LOCKDOWN GUARD
+    // 🔒 STRICT INBOUND LOCKDOWN GUARD (Only your number gets past)
     const ALLOWED_TESTER = '27833272007'; 
     if (from !== ALLOWED_TESTER) {
-      return; // Drops execution instantly for production users
+      return; 
     }
 
     console.log([Engine Test Execution] Running sequence for ${from}: "${text}");
@@ -130,7 +130,7 @@ app.post('/webhook', async (req, res) => {
     // Step 2: Niche Picker
     else if (currentStep === 'qualify_pending') {
       if (text === '2') {
-        await sendWhatsApp(from, "No problem! Let us know if you change your mind.");
+        await sendWhatsApp(from, "No problem! Let us know if things change.");
         await syncLeadState(from, { step: 'new' });
       } else {
         await syncLeadState(from, { step: 'niche_pending' });
