@@ -12,40 +12,46 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-console.log('ENTRY FILE EXECUTING — NEW STEP ENGINE ACTIVE');
+console.log('ENTRY FILE EXECUTING — BLANK SLATE CLEAN RUN');
 
 // ─── Health endpoints ─────────────────────────────────────────────────────────
-app.get('/', (req, res) => res.status(200).send('BrandSignl Micro-Funnel — OK'));
+app.get('/', (req, res) => res.status(200).send('BrandSignl Funnel — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 // ─── Send WhatsApp message via Evolution API ──────────────────────────────────
 async function sendWhatsApp(number, text, imageUrl = null) {
-  let validImageUrl = (imageUrl && String(imageUrl).trim() !== '') ? String(imageUrl).trim() : null;
-  
-  if (validImageUrl && validImageUrl.includes('.comnull/')) {
-    validImageUrl = validImageUrl.replace('.comnull/', '.com/');
-  }
-
-  const endpoint = validImageUrl ? 'message/sendMedia' : 'message/sendText';
-  const url = ${EVOLUTION_API_URL}/${endpoint}/${EVOLUTION_INSTANCE};
-  
-  const payload = validImageUrl ? {
-    number: number,
-    mediaMessage: {
-      mediatype: 'image',
-      caption: String(text),
-      media: validImageUrl
+  try {
+    let validImageUrl = (imageUrl && String(imageUrl).trim() !== '') ? String(imageUrl).trim() : null;
+    
+    if (validImageUrl && validImageUrl.includes('.comnull/')) {
+      validImageUrl = validImageUrl.replace('.comnull/', '.com/');
     }
-  } : {
-    number: number,
-    text: String(text)
-  };
 
-  const response = await axios.post(url, payload, {
-    headers: { apikey: EVOLUTION_API_KEY },
-    timeout: 15000
-  });
-  return response.data;
+    const endpoint = validImageUrl ? 'message/sendMedia' : 'message/sendText';
+    const url = ${EVOLUTION_API_URL}/${endpoint}/${EVOLUTION_INSTANCE};
+    
+    const payload = validImageUrl ? {
+      number: number,
+      mediaMessage: {
+        mediatype: 'image',
+        caption: String(text),
+        media: validImageUrl
+      }
+    } : {
+      number: number,
+      text: String(text)
+    };
+
+    console.log([Bot] Dispatching ${endpoint} to ${number});
+    const response = await axios.post(url, payload, {
+      headers: { apikey: EVOLUTION_API_KEY },
+      timeout: 15000
+    });
+    return response.data;
+  } catch (err) {
+    console.error('[Bot WhatsApp Dispatch Error]:', err.message);
+    return null;
+  }
 }
 
 // ─── Backend Pipeline Integration Helpers ─────────────────────────────────────
@@ -106,98 +112,93 @@ app.post('/webhook', async (req, res) => {
     const ALLOWED_TESTER = '27833272007'; 
     if (from !== ALLOWED_TESTER) return;
 
-    console.log([Micro-Funnel] Incoming test message from ${from}: "${text}");
+    console.log([Micro-Funnel] Message from tester: "${text}");
 
-    // Fetch or start their step tracking history
+    // Sync state map
     let stateData = await syncLeadState(from);
     let currentStep = stateData && stateData.lead ? stateData.lead.step : 'new';
     
-    // Reset trigger to easily re-test the sequence anytime
-    if (text.toLowerCase() === 'reset' || text.toLowerCase() === 'nails' || text.toLowerCase() === 'unhas') {
+    const lowerText = text.toLowerCase();
+    if (lowerText === 'reset' || lowerText === 'restart' || lowerText === 'nails') {
       currentStep = 'new';
     }
 
-    // ─── STEP FLOW MACHINE ───────────────────────────────────────────────────
+    // ─── STEPS ENGINE RUNNER ─────────────────────────────────────────────────
     
+    // Step 1: Qualification Gate
     if (currentStep === 'new') {
       await syncLeadState(from, { step: 'qualify_pending' });
-      await sendWhatsApp(from, "Are you a beauty professional looking for more clients?\n\n1. Yes, looking for clients\n2. Just browsing");
+      await sendWhatsApp(from, "Are you a beauty professional looking for more clients?\n\n1. Yes\n2. Just browsing");
     }
     
+    // Step 2: Niche Selector
     else if (currentStep === 'qualify_pending') {
       if (text === '2') {
-        await sendWhatsApp(from, "No problem! Let us know if you change your mind later.");
+        await sendWhatsApp(from, "No problem! Let us know if things change.");
         await syncLeadState(from, { step: 'new' });
       } else {
         await syncLeadState(from, { step: 'niche_pending' });
-        await sendWhatsApp(from, "Great! What is your niche?\n\n1. Nails\n2. Hair\n3. Lashes");
+        await sendWhatsApp(from, "What's your niche?\n\n1. Nails\n2. Hair\n3. Lashes");
       }
     }
     
+    // Step 3: Brand Details Intake
     else if (currentStep === 'niche_pending') {
-      let selectedNiche = 'nails';
-      if (text === '2') selectedNiche = 'hair';
-      if (text === '3') selectedNiche = 'lashes';
+      let mappedNiche = 'nails';
+      if (text === '2') mappedNiche = 'hair';
+      if (text === '3') mappedNiche = 'lashes';
 
-      // Save niche and bump state to collect brand names
-      await syncLeadState(from, { niche: selectedNiche, step: 'branding_pending' });
-      await sendWhatsApp(from, "To generate your custom sample, what is your Business Name and Contact Number?\n\nReply in this format: Salon Name, Phone Number");
+      await syncLeadState(from, { niche: mappedNiche, step: 'branding_pending' });
+      await sendWhatsApp(from, "To give you a sample please give us business name and contact no.");
     }
     
+    // Step 4: Live Branded Preview Generation & Delivery
     else if (currentStep === 'branding_pending') {
-      // Split the text comma to capture name vs phone
-      const parts = text.split(',');
+      const parts = text.includes(',') ? text.split(',') : [text, ''];
       const bizName = parts[0] ? parts[0].trim() : "My Salon";
       const bizPhone = parts[1] ? parts[1].trim() : from;
 
-      await sendWhatsApp(from, "Generating your custom branded preview post now... ⚡");
+      await sendWhatsApp(from, "Generating your custom branded sample post now... ⚡");
 
-      // Pull current niche tag stored in DB
-      const storedNiche = stateData && stateData.lead ? stateData.lead.niche : 'nails';
+      const activeNiche = stateData && stateData.lead ? stateData.lead.niche : 'nails';
+      const previewAsset = await getLivePreview(activeNiche, bizName, bizPhone);
       
-      // Request custom branded preview image block from backend
-      const previewAsset = await getLivePreview(storedNiche, bizName, bizPhone);
-      
-      let replyMessage = "Here is your branded sample post layout!";
+      let captionText = "Here is your branded sample post layout!";
       let targetImageUrl = null;
 
       if (previewAsset) {
         const hook = previewAsset.hook ? *${previewAsset.hook}*\n\n : '';
-        const caption = previewAsset.caption || '';
-        replyMessage = ${hook}${caption};
+        const bodyContent = previewAsset.caption || '';
+        captionText = ${hook}${bodyContent};
         targetImageUrl = previewAsset.imageUrl || null;
       }
 
-      // Send image with short caption
-      await sendWhatsApp(from, replyMessage, targetImageUrl);
-      
-      // Follow up with option gate
+      await sendWhatsApp(from, captionText, targetImageUrl);
       await sendWhatsApp(from, "Are you happy with this post?\n\n1. Yes\n2. No");
       await syncLeadState(from, { step: 'satisfaction_pending' });
     }
     
+    // Step 5: Package Choice & Call-To-Action Close
     else if (currentStep === 'satisfaction_pending') {
       await syncLeadState(from, { step: 'package_pending' });
-      await sendWhatsApp(from, "Awesome! Do you want a 6-Post Pack or a 20-Post Pack?\n\n1. 6 Posts (R99)\n2. 20 Posts (R249)");
+      await sendWhatsApp(from, "Do you want 6 posts or 20 posts?\n\n1. 6 Posts\n2. 20 Posts");
     }
     
     else if (currentStep === 'package_pending') {
-      let checkoutLink = "https://brandsignl.com/nails/confirm"; // Default 6 pack link
-      let selectedPack = "6 Posts";
+      let checkoutLink = "https://brandsignl.com/nails/confirm";
+      let packageSelection = "6 Posts";
       
       if (text === '2') {
-        checkoutLink = "https://brandsignl.com/nails/premium-bundle"; // 20 pack link
-        selectedPack = "20 Posts";
+        checkoutLink = "https://brandsignl.com/nails/premium-bundle";
+        packageSelection = "20 Posts";
       }
 
-      let paymentMessage = Perfect! Your layout package for ${selectedPack} is reserved.\n\n👉 Complete your secure PayFast checkout here:\n${checkoutLink};
-      
-      await sendWhatsApp(from, paymentMessage);
+      await sendWhatsApp(from, Perfect! Your package for ${packageSelection} is reserved.\n\n👉 Complete checkout here:\n${checkoutLink});
       await syncLeadState(from, { step: 'awaiting_payment' });
     }
     
     else if (currentStep === 'awaiting_payment') {
-      await sendWhatsApp(from, "Your order is securely reserved. Once payment is completed, your final package download page link drops right here.");
+      await sendWhatsApp(from, "Your order is securely reserved. Once checkout completes, your layout link drops here.");
     }
 
   } catch (err) {
