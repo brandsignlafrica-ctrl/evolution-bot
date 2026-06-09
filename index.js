@@ -49,7 +49,7 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     }
 
     const endpoint = validImageUrl ? 'message/sendMedia' : 'message/sendText';
-    const url = ${EVOLUTION_API_URL}/${endpoint}/${EVOLUTION_INSTANCE};
+    const url = EVOLUTION_API_URL + '/' + endpoint + '/' + EVOLUTION_INSTANCE;
     
     const payload = validImageUrl ? {
       number: number,
@@ -64,13 +64,13 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     });
     return response.data;
   } catch (err) {
-    console.error(Bot WhatsApp Dispatch Error: ${err.message});
+    console.error('Bot WhatsApp Dispatch Error: ' + err.message);
     if (imageUrl) {
       try {
-        const fallbackUrl = ${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE};
-        await axios.post(fallbackUrl, { number, text: String(text) }, { headers: { apikey: EVOLUTION_API_KEY }, timeout: 10000 });
+        const fallbackUrl = EVOLUTION_API_URL + '/message/sendText/' + EVOLUTION_INSTANCE;
+        await axios.post(fallbackUrl, { number: number, text: String(text) }, { headers: { apikey: EVOLUTION_API_KEY }, timeout: 10000 });
       } catch (fallbackErr) {
-        console.error(Fallback Text Dispatch Failed: ${fallbackErr.message});
+        console.error('Fallback Text Dispatch Failed: ' + fallbackErr.message);
       }
     }
     return null;
@@ -79,23 +79,23 @@ async function sendWhatsApp(number, text, imageUrl = null) {
 
 async function backgroundSyncDB(phone, updates = {}) {
   try {
-    const url = ${BRANDSIGNL_URL}/api/wa-lead;
-    await axios.post(url, { phone, ...updates }, { timeout: 5000 });
+    const url = BRANDSIGNL_URL + '/api/wa-lead';
+    await axios.post(url, { phone: phone, ...updates }, { timeout: 5000 });
   } catch (err) {
-    console.error(Non-Blocking DB Sync Notification: ${err.message});
+    console.error('Non-Blocking DB Sync Notification: ' + err.message);
   }
 }
 
 async function getLivePreview(niche, brandName, brandPhone) {
   try {
-    const url = ${BRANDSIGNL_URL}/api/wa-preview;
+    const url = BRANDSIGNL_URL + '/api/wa-preview';
     const res = await axios.get(url, {
-      params: { niche, businessName: brandName, businessPhone: brandPhone },
+      params: { niche: niche, businessName: brandName, businessPhone: brandPhone },
       timeout: 15000
     });
     return res.data;
   } catch (err) {
-    console.error(Backend API Preview Error: ${err.message});
+    console.error('Backend API Preview Error: ' + err.message);
     return null;
   }
 }
@@ -171,7 +171,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 2: NICHE SELECTOR ──────────────────────────────────────────────
+    // ─── STEP 2: NICHE SELECTOR + ALGORITHMIC PITCH ──────────────────────────
     if (localStep === 'qualify_pending') {
       if (text === '2' || inputLower.includes('navegando') || inputLower.includes('browsing')) {
         const msg = (userLang === 'pt') ? "Sem problemas! Nos avise se mudar de ideia mais tarde." : "No problem! Let us know if things change.";
@@ -187,7 +187,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 3: BRAND METADATA INTAKE + ALGORITHMIC PITCH ───────────────────
+    // ─── STEP 3: BRAND METADATA INTAKE ───────────────────────────────────────
     if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
       if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
@@ -263,23 +263,3 @@ app.post('/webhook', async (req, res) => {
         linkTarget = (text === '2') ? "https://pay.hotmart.com/W105949535S?checkoutMode=10" : "https://pay.hotmart.com/W105949535S";
         chosenLabel = (text === '2') ? "20 Posts" : "6 Posts";
       }
-      const closeMsg = (userLang === 'pt') ? "Perfeito! Seu pacote de " + chosenLabel + " está reservado.\n\n👉 Conclua seu pagamento seguro via Pix aqui:\n" + linkTarget : "Perfect! Your package for " + chosenLabel + " is securely reserved.\n\n👉 Complete checkout here:\n" + linkTarget;
-      await sendWhatsApp(cleanFrom, closeMsg);
-      sessionSteps.set(cleanFrom, 'awaiting_payment');
-      backgroundSyncDB(cleanFrom, { step: 'awaiting_payment', lang: userLang });
-      return;
-    }
-    
-    if (localStep === 'awaiting_payment') {
-      const lockMsg = (userLang === 'pt') ? "Seu pedido está reservado com segurança! Assim que o Pix for confirmado, seu link de acesso exclusivo será enviado direto aqui neste chat." : "Your order is securely reserved. Once checkout completes, your custom high-converting content pack download link drops right here in this chat.";
-      await sendWhatsApp(cleanFrom, lockMsg);
-      return;
-    }
-
-  } catch (err) {
-    console.error('Webhook Loop Error: ' + err.message);
-  }
-});
-
-app.use((req, res) => res.status(404).send('Not found'));
-app.listen(PORT, '0.0.0.0', () => console.log('SERVER READY ON PORT ' + PORT));
