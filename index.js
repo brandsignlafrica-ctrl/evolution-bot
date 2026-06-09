@@ -25,7 +25,7 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: Fixed Diagnostic Lockdown Engine Online');
+console.log('STARTUP: Unfiltered Diagnostic Tracking Engine Online');
 
 app.get('/', (req, res) => res.status(200).send('BrandSignl Diagnostics — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
@@ -88,19 +88,37 @@ async function getLivePreview(niche, brandName, brandPhone) {
 }
 
 app.post('/webhook', async (req, res) => {
+  console.log('🚨 WEBHOOK HIT AT:', new Date().toISOString());
   res.status(200).send('ok');
 
   try {
     const body = req.body;
-    if (!body || body.event !== 'messages.upsert') return;
+    if (!body) return;
+
+    // 🔥 RAW PACKET ANALYSIS (Before ANY filter runs)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📦 RAW PACKET INBOUND TO BOT');
+    console.log('👉 Event String Type: ', body.event);
+    console.log('👉 Instance Name:     ', body.instance);
+    if (body.data && body.data.key) {
+      console.log('👉 Message fromMe:    ', body.data.key.fromMe);
+      console.log('👉 Remote JID String: ', body.data.key.remoteJid);
+    }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // 🛑 FILTER SECTION
+    if (body.event !== 'messages.upsert') return;
 
     const incomingInstance = body.instance || '';
-    if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) return; 
+    // If instance config check breaks, print warning
+    if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) {
+      console.log(⚠️ Instance mismatch. Expected [${EVOLUTION_INSTANCE}], got [${incomingInstance}]);
+      return; 
+    }
 
     const data = body.data;
     if (!data || !data.key || !data.message) return;
     if (data.key.fromMe === true) return;
-    if (body.data.status || body.data.update) return;
 
     const messageId = data.key.id || '';
     if (messageId) {
@@ -124,22 +142,7 @@ app.post('/webhook', async (req, res) => {
 
     if (!rawFrom || !text) return;
 
-    // 🔥 FIXED HIGH-VISIBILITY DIAGNOSTIC LOGS
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔍 INBOUND MESSAGE DETECTED');
-    console.log('👉 RAW FROM PAYLOAD:      ', "'" + rawFrom + "'");
-    console.log('👉 CLEAN NUMBERS-ONLY:    ', "'" + cleanFrom + "'");
-    console.log('👉 INCOMING TEXT STRING:  ', "'" + text + "'");
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-    // 🔒 THE GUARD GATE CHECK
-    const ALLOWED_TESTER = '27833272007'; 
-    if (cleanFrom !== ALLOWED_TESTER && rawFrom !== ALLOWED_TESTER) {
-      console.log('❌ BLOCK: Sender did not match ALLOWED_TESTER. Dropping message.');
-      return;
-    }
-
-    console.log('✅ PASS: Lockdown cleared! Processing funnel steps...');
+    console.log(🎯 PASS GUARD CHECK -> Normalized Number: [${cleanFrom}] | Text: [${text}]);
 
     let localStep = sessionSteps.get(cleanFrom) || 'new';
     let userLang = sessionLangs.get(cleanFrom) || detectLang(text);
