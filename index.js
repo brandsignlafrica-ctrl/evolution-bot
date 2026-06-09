@@ -1,32 +1,15 @@
-'use strict';
-const express = require('express');
-const axios = require('axios');
-const app = express();
-app.use(express.json({ limit: '10mb' }));
-
-app.post('/webhook', async (req, res) => {
-  res.status(200).send('ok');
-
-  const body = req.body;
-  console.log('📦 INBOUND EVENT:', body.event);
-
-  try {
-    // Check if it's a chat message
-    if (body.event === 'messages.upsert') {
-      const data = body.data;
-      const remoteJid = data?.key?.remoteJid || '';
-      const text = (data?.message?.conversation || data?.message?.extendedTextMessage?.text || '').trim();
-
-      if (text) {
-        console.log('✅ CHAT MESSAGE RECEIVED: ' + text);
-        // Your logic goes here
-      }
-    } else {
-      console.log('ℹ️ Non-chat event ignored: ' + body.event);
-    }
-  } catch (err) {
-    console.error('Webhook Error:', err.message);
-  }
-});
-
-app.listen(8080, () => console.log('SERVER ONLINE'));
+fetch('https://evolution-api-production-53a9.up.railway.app/webhook/set/Brandsignl%20Main%20V4', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'apikey': 'FDE3646665F6-4E47-A279-A6BECE1C3D5D'
+  },
+  body: JSON.stringify({
+    url: 'https://evolution-bot-production.up.railway.app/webhook',
+    enabled: true,
+    events: ['messages.upsert', 'connection.update']
+  })
+})
+.then(response => response.json())
+.then(data => console.log('FORCE-BIND SUCCESS:', data))
+.catch(error => console.error('FORCE-BIND ERROR:', error));
