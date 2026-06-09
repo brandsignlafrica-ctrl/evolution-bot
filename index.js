@@ -12,24 +12,20 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-console.log('STARTUP: Multi-Language Multi-Step Engine Live');
+console.log('STARTUP: Multi-Language Engine Staging Safe Running');
 
-// ─── Health check routes ──────────────────────────────────────────────────────
-app.get('/', (req, res) => res.status(200).send('BrandSignl Bot — OK'));
+app.get('/', (req, res) => res.status(200).send('BrandSignl Local State Overrides — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
-// ─── Language detection helper ────────────────────────────────────────────────
 function detectLang(text) {
-  const pt = /\b(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad|quero|preciso|meu|minha|como|você|voce|por favor|ajuda|cabelo|unhas|cílios|sobrancelha|manicure|manicura|unhas)\b/i;
+  const pt = /\b(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad|quero|preciso|meu|minha|como|você|voce|por favor|ajuda|cabelo|unhas|cílios|sobrancelha|manicure|manicura)\b/i;
   if (pt.test(text)) return 'pt';
   return 'en';
 }
 
-// ─── Send WhatsApp message via Evolution API ──────────────────────────────────
 async function sendWhatsApp(number, text, imageUrl = null) {
   try {
     let validImageUrl = (imageUrl && String(imageUrl).trim() !== '') ? String(imageUrl).trim() : null;
-    
     if (validImageUrl && validImageUrl.includes('.comnull/')) {
       validImageUrl = validImageUrl.replace('.comnull/', '.com/');
     }
@@ -39,14 +35,9 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     
     const payload = validImageUrl ? {
       number: number,
-      mediaMessage: {
-        mediatype: 'image',
-        caption: String(text),
-        media: validImageUrl
-      }
+      mediaMessage: { mediatype: 'image', caption: String(text), media: validImageUrl }
     } : {
-      number: number,
-      text: String(text)
+      number: number, text: String(text)
     };
 
     const response = await axios.post(url, payload, {
@@ -60,7 +51,6 @@ async function sendWhatsApp(number, text, imageUrl = null) {
   }
 }
 
-// ─── Backend API Connectors ───────────────────────────────────────────────────
 async function syncLeadState(phone, updates = {}) {
   try {
     const url = BRANDSIGNL_URL + '/api/wa-lead';
@@ -86,7 +76,6 @@ async function getLivePreview(niche, brandName, brandPhone) {
   }
 }
 
-// ─── Webhook Router ───────────────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
   res.status(200).send('ok');
 
@@ -112,33 +101,28 @@ app.post('/webhook', async (req, res) => {
 
     if (!from || !text) return;
 
-    // 🔒 STRICT INBOUND LOCKDOWN GUARD (Only your number gets past)
+    // 🔒 STRICT INBOUND LOCKDOWN GUARD (Staging Device Only)
     const ALLOWED_TESTER = '27833272007'; 
-    if (from !== ALLOWED_TESTER) {
-      return; 
-    }
+    if (from !== ALLOWED_TESTER) return;
 
-    console.log('Engine Test Execution: Processing text for sender ' + from + ' - Text: ' + text);
+    console.log('Engine Parser Execution -> From: ' + from + ' Text: ' + text);
 
     let stateData = await syncLeadState(from);
-    let currentStep = stateData && stateData.lead ? stateData.lead.step : 'new';
-    
-    // Maintain language choice across state loops inside the session pipeline
+    let localStep = stateData && stateData.lead ? stateData.lead.step : 'new';
     let userLang = stateData && stateData.lead && stateData.lead.lang ? stateData.lead.lang : detectLang(text);
     
     const inputLower = text.toLowerCase();
     
-    // Check if the user is triggering a fresh start keyword
+    // Check if the user initiated an explicit state wipe via initial keywords
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
-      currentStep = 'new';
-      userLang = detectLang(text); // Re-detect language specifically based on the entry keyword used
+      localStep = 'new';
+      userLang = detectLang(text);
     }
 
-    // ─── 5-STEP FUNNEL LOGIC MAP ─────────────────────────────────────────────
-    
-    // Step 1: Qualification Gate
-    if (currentStep === 'new') {
-      // Force database to explicitly update state properties and track language locale
+    console.log('Current Computed Step Segment Location is: [' + localStep + '] Mode: [' + userLang + ']');
+
+    // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
+    if (localStep === 'new') {
       await syncLeadState(from, { step: 'qualify_pending', lang: userLang });
       
       const msg = (userLang === 'pt') 
@@ -149,8 +133,8 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // Step 2: Niche Picker
-    if (currentStep === 'qualify_pending') {
+    // ─── STEP 2: NICHE SELECTOR ──────────────────────────────────────────────
+    if (localStep === 'qualify_pending') {
       if (text === '2') {
         const msg = (userLang === 'pt') 
           ? "Sem problemas! Nos avise se mudar de ideia mais tarde." 
@@ -158,7 +142,9 @@ app.post('/webhook', async (req, res) => {
         await sendWhatsApp(from, msg);
         await syncLeadState(from, { step: 'new' });
       } else {
+        // Enforce the sync parameters to save database states cleanly
         await syncLeadState(from, { step: 'niche_pending' });
+        
         const msg = (userLang === 'pt')
           ? "Excelente! Qual é o seu nicho?\n\n1. Unhas\n2. Cabelo\n3. Cílios"
           : "What's your niche?\n\n1. Nails\n2. Hair\n3. Lashes";
@@ -167,8 +153,8 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // Step 3: Brand Metadata Capture
-    if (currentStep === 'niche_pending') {
+    // ─── STEP 3: BRAND METADATA INTAKE ───────────────────────────────────────
+    if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
       if (text === '2') activeNiche = 'hair';
       if (text === '3') activeNiche = 'lashes';
@@ -183,8 +169,8 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // Step 4: Overlaid Image Delivery & Feedback Request
-    if (currentStep === 'branding_pending') {
+    // ─── STEP 4: PREVIEW DELIVERY & FEEDBACK ─────────────────────────────────
+    if (localStep === 'branding_pending') {
       const segments = text.includes(',') ? text.split(',') : [text, ''];
       const salonName = segments[0] ? segments[0].trim() : "My Salon";
       const salonPhone = segments[1] ? segments[1].trim() : from;
@@ -221,8 +207,8 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // Step 5: Packaging Selection & Checkout Link Close
-    if (currentStep === 'satisfaction_pending') {
+    // ─── STEP 5: PACKAGE OPTION CLOSE ────────────────────────────────────────
+    if (localStep === 'satisfaction_pending') {
       await syncLeadState(from, { step: 'package_pending' });
       
       const msg = (userLang === 'pt')
@@ -232,7 +218,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    if (currentStep === 'package_pending') {
+    if (localStep === 'package_pending') {
       let linkTarget = "https://brandsignl.com/nails/confirm";
       let chosenLabel = "6 Posts";
       
@@ -241,7 +227,6 @@ app.post('/webhook', async (req, res) => {
         chosenLabel = "20 Posts";
       }
 
-      // If user is accessing via Portuguese paths, map to your Hotmart link structures
       if (userLang === 'pt') {
         linkTarget = (text === '2') ? "https://pay.hotmart.com/W105949535S?checkoutMode=10" : "https://pay.hotmart.com/W105949535S";
         chosenLabel = (text === '2') ? "20 Posts" : "6 Posts";
@@ -256,8 +241,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // Fallback Loop Protection
-    if (currentStep === 'awaiting_payment') {
+    if (localStep === 'awaiting_payment') {
       const lockMsg = (userLang === 'pt')
         ? "Seu pedido está reservado com segurança! Assim que o Pix for confirmado, seu link de acesso exclusivo será enviado direto aqui neste chat."
         : "Your order is securely reserved. Once checkout completes, your layout link drops here.";
