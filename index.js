@@ -65,7 +65,6 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     return response.data;
   } catch (err) {
     console.error(Bot WhatsApp Dispatch Error: ${err.message});
-    // Fallback: If image dispatch fails with 400, automatically push as text so the user is never left hanging
     if (imageUrl) {
       try {
         const fallbackUrl = ${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE};
@@ -198,7 +197,6 @@ app.post('/webhook', async (req, res) => {
       sessionSteps.set(cleanFrom, 'branding_pending');
       backgroundSyncDB(cleanFrom, { niche: activeNiche, step: 'branding_pending', lang: userLang });
       
-      // ⚡ ENHANCED UX: Explaining the Meta algorithm trick immediately before taking information
       const explanationMsg = (userLang === 'pt')
         ? "💡 Como funciona:\nPostar apenas fotos de unhas confunde as redes sociais. O algoritmo mostra suas fotos para amigos, não para clientes. Nossos layouts focam na Intenção de Compra para treinar o algoritmo a atrair agendamentos reais.\n\nPara gerarmos sua amostra grátis agora, digite o Nome da sua Empresa, Número de Contato (Exemplo: Salão da Ana, 0821234567)."
         : "💡 Why this changes things:\nPosting standard selfies and plain work pics confuses Meta. The algorithm shows your posts to friends, not buyers—causing lots of views but no bookings. Our layouts focus on Buyer-Intent to teach the algorithm that your page = appointments.\n\nTo generate your custom branded sample post now, please send your Business Name and Contact Number (separated by a comma, e.g., My Salon, 0821234567).";
@@ -249,7 +247,6 @@ app.post('/webhook', async (req, res) => {
       sessionSteps.set(cleanFrom, 'package_pending');
       backgroundSyncDB(cleanFrom, { step: 'package_pending', lang: userLang });
       
-      // ⚡ ENHANCED UX: Show price value comparison right at checkout selection
       const msg = (userLang === 'pt') 
         ? "Excelente! Você prefere o Pacote de 6 posts ou o Pacote de 20 posts?\n\n1. 6 Posts\n2. 20 Posts" 
         : "Awesome! Ready to fix your social media algorithm for good?\n\nOur 6-post pack trains Meta what you do for the next 6 months. Just 1 new client pays for the pack 2.5x over.\n\nWhich option works best for you?\n\n1. 6 Posts Pack (R99 once-off)\n2. 20 Premium Bundle";
