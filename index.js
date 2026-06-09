@@ -171,7 +171,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 2: NICHE SELECTOR + ALGORITHMIC PITCH ──────────────────────────
+    // ─── STEP 2: NICHE SELECTOR ──────────────────────────────────────────────
     if (localStep === 'qualify_pending') {
       if (text === '2' || inputLower.includes('navegando') || inputLower.includes('browsing')) {
         const msg = (userLang === 'pt') ? "Sem problemas! Nos avise se mudar de ideia mais tarde." : "No problem! Let us know if things change.";
@@ -187,7 +187,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 3: BRAND METADATA INTAKE ───────────────────────────────────────
+    // ─── STEP 3: BRAND METADATA INTAKE + ALGORITHMIC PITCH ───────────────────
     if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
       if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
