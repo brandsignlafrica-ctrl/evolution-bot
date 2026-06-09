@@ -12,12 +12,11 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-// 🧠 LIVE RUNTIME MEMORY STORAGE
+// Runtime memory states
 const sessionSteps = new Map();
 const sessionLangs = new Map();
 const sessionNiches = new Map();
 
-// In-Memory Timeout Cache to drop extra network hits
 const processedMessages = new Map();
 setInterval(() => {
   const now = Date.now();
@@ -26,10 +25,9 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: Fast RAM Memory Tracking Engine Initializing...');
+console.log('STARTUP: Diagnostic Lockdown Engine Online');
 
-// ─── CORE SYSTEM ROUTES ──────────────────────────────────────────────────────
-app.get('/', (req, res) => res.status(200).send('BrandSignl Memory Engine — OK'));
+app.get('/', (req, res) => res.status(200).send('BrandSignl Diagnostics — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 function detectLang(text) {
@@ -89,9 +87,8 @@ async function getLivePreview(niche, brandName, brandPhone) {
   }
 }
 
-// ─── WEBHOOK ROUTER HANDLER ──────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
-  console.log('🚨 WEBHOOK HIT AT:', new Date().toISOString());
+  // Always acknowledge the incoming hit instantly
   res.status(200).send('ok');
 
   try {
@@ -115,7 +112,10 @@ app.post('/webhook', async (req, res) => {
     const remoteJid = data.key.remoteJid || '';
     if (remoteJid.endsWith('@g.us')) return;
 
-    const from = remoteJid.split('@')[0].replace(/\D/g, '').trim();
+    // Extract the exact sender string value from the payload
+    const rawFrom = remoteJid.split('@')[0].trim();
+    const cleanFrom = rawFrom.replace(/\D/g, '').trim();
+
     const text = (
       (data.message.conversation) ||
       (data.message.extendedTextMessage && data.message.extendedTextMessage.text) ||
@@ -124,98 +124,96 @@ app.post('/webhook', async (req, res) => {
       ''
     ).trim();
 
-    if (!from || !text) return;
+    if (!rawFrom || !text) return;
 
-    // 🔒 STRICT LOCKDOWN ENFORCED (Only your test device responds)
+    // 🔥 HIGH-VISIBILITY DIAGNOSTIC LOGS
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 INBOUND MESSAGE DETECTED');
+    console.log('👉 RAW FROM PAYLOAD:      ', "'" + rawFrom + "'");
+    console.log('👉 CLEAN NUMBERS-ONLY:    ', "'" + cleanFrom + "'");
+    console.log('👉 INCOMING TEXT STRING:  ', "'" + text + "'");
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // 🔒 THE GUARD GATE CHECK
     const ALLOWED_TESTER = '27833272007'; 
-    if (from !== ALLOWED_TESTER) return;
+    if (cleanFrom !== ALLOWED_TESTER && rawFrom !== ALLOWED_TESTER) {
+      console.log(❌ BLOCK: Sender did not match ALLOWED_TESTER. Dropping message.);
+      return;
+    }
 
-    console.log('🎯 RUNNING FOR ALLOWED TESTER -> Text: ' + text);
+    console.log('✅ PASS: Lockdown cleared! Processing funnel steps...');
 
-    let localStep = sessionSteps.get(from) || 'new';
-    let userLang = sessionLangs.get(from) || detectLang(text);
-    
+    let localStep = sessionSteps.get(cleanFrom) || 'new';
+    let userLang = sessionLangs.get(cleanFrom) || detectLang(text);
     const inputLower = text.toLowerCase();
     
+    // Keyword Override Reset Gate
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
-      localStep = 'new';
       userLang = detectLang(text);
-      sessionSteps.set(from, 'new');
-      sessionLangs.set(from, userLang);
+      sessionSteps.set(cleanFrom, 'qualify_pending');
+      sessionLangs.set(cleanFrom, userLang);
+      backgroundSyncDB(cleanFrom, { step: 'qualify_pending', lang: userLang });
+
+      const msg = (userLang === 'pt') 
+        ? "Você é um profissional da beleza buscando mais clientes?\n\n1. Sim\n2. Apenas navegando"
+        : "Are you a beauty professional looking for more clients?\n\n1. Yes\n2. Just browsing";
+        
+      await sendWhatsApp(cleanFrom, msg);
+      return;
     }
 
-    if ((inputLower === '1' || inputLower === 'sim') && localStep === 'new') {
-      userLang = 'pt';
-      sessionLangs.set(from, 'pt');
-    }
-
-    console.log('Memory Processing State Validation -> Step: [' + localStep + '] Language: [' + userLang + ']');
-
-    // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
+    // Funnel Execution mapping logic...
     if (localStep === 'new') {
-      sessionSteps.set(from, 'qualify_pending');
-      sessionLangs.set(from, userLang);
-      backgroundSyncDB(from, { step: 'qualify_pending', lang: userLang });
+      sessionSteps.set(cleanFrom, 'qualify_pending');
+      sessionLangs.set(cleanFrom, userLang);
+      backgroundSyncDB(cleanFrom, { step: 'qualify_pending', lang: userLang });
       
       const msg = (userLang === 'pt') 
         ? "Você é um profissional da beleza buscando mais clientes?\n\n1. Sim\n2. Apenas navegando"
         : "Are you a beauty professional looking for more clients?\n\n1. Yes\n2. Just browsing";
         
-      await sendWhatsApp(from, msg);
+      await sendWhatsApp(cleanFrom, msg);
       return;
     }
     
-    // ─── STEP 2: NICHE SELECTOR ──────────────────────────────────────────────
     if (localStep === 'qualify_pending') {
       if (text === '2' || inputLower.includes('navegando') || inputLower.includes('browsing')) {
-        const msg = (userLang === 'pt') 
-          ? "Sem problemas! Nos avise se mudar de ideia mais tarde." 
-          : "No problem! Let us know if things change.";
-        await sendWhatsApp(from, msg);
-        sessionSteps.set(from, 'new');
-        backgroundSyncDB(from, { step: 'new' });
+        const msg = (userLang === 'pt') ? "Sem problemas! Nos avise se mudar de ideia mais tarde." : "No problem! Let us know if things change.";
+        await sendWhatsApp(cleanFrom, msg);
+        sessionSteps.set(cleanFrom, 'new');
+        backgroundSyncDB(cleanFrom, { step: 'new' });
       } else {
-        sessionSteps.set(from, 'niche_pending');
-        backgroundSyncDB(from, { step: 'niche_pending', lang: userLang });
-        
-        const msg = (userLang === 'pt')
-          ? "Excelente! Qual é o seu nicho?\n\n1. Unhas\n2. Cabelo\n3. Cílios"
-          : "What's your niche?\n\n1. Nails\n2. Hair\n3. Lashes";
-        await sendWhatsApp(from, msg);
+        sessionSteps.set(cleanFrom, 'niche_pending');
+        backgroundSyncDB(cleanFrom, { step: 'niche_pending', lang: userLang });
+        const msg = (userLang === 'pt') ? "Excelente! Qual é o seu nicho?\n\n1. Unhas\n2. Cabelo\n3. Cílios" : "What's your niche?\n\n1. Nails\n2. Hair\n3. Lashes";
+        await sendWhatsApp(cleanFrom, msg);
       }
       return;
     }
     
-    // ─── STEP 3: BRAND METADATA INTAKE ───────────────────────────────────────
     if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
       if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
       if (text === '3' || inputLower.includes('cílios') || inputLower.includes('lashes')) activeNiche = 'lashes';
 
-      sessionNiches.set(from, activeNiche);
-      sessionSteps.set(from, 'branding_pending');
-      backgroundSyncDB(from, { niche: activeNiche, step: 'branding_pending', lang: userLang });
+      sessionNiches.set(cleanFrom, activeNiche);
+      sessionSteps.set(cleanFrom, 'branding_pending');
+      backgroundSyncDB(cleanFrom, { niche: activeNiche, step: 'branding_pending', lang: userLang });
       
-      const msg = (userLang === 'pt')
-        ? "Para criarmos sua amostra, por favor envie o Nome da sua Empresa e o Número de Contato."
-        : "To give you a sample please give us business name and contact no.";
-        
-      await sendWhatsApp(from, msg);
+      const msg = (userLang === 'pt') ? "Para criarmos sua amostra, por favor envie o Nome da sua Empresa e o Número de Contato." : "To give you a sample please give us business name and contact no.";
+      await sendWhatsApp(cleanFrom, msg);
       return;
     }
     
-    // ─── STEP 4: PREVIEW DELIVERY & FEEDBACK ─────────────────────────────────
     if (localStep === 'branding_pending') {
       const segments = text.includes(',') ? text.split(',') : [text, ''];
       const salonName = segments[0] ? segments[0].trim() : "My Salon";
-      const salonPhone = segments[1] ? segments[1].trim() : from;
+      const salonPhone = segments[1] ? segments[1].trim() : cleanFrom;
 
-      const workingMsg = (userLang === 'pt')
-        ? "Gerando o layout do seu post personalizado agora... ⚡"
-        : "Generating your custom branded sample post now... ⚡";
-      await sendWhatsApp(from, workingMsg);
+      const workingMsg = (userLang === 'pt') ? "Gerando o layout do seu post personalizado agora... ⚡" : "Generating your custom branded sample post now... ⚡";
+      await sendWhatsApp(cleanFrom, workingMsg);
 
-      const currentNiche = sessionNiches.get(from) || 'nails';
+      const currentNiche = sessionNiches.get(cleanFrom) || 'nails';
       const previewAsset = await getLivePreview(currentNiche, salonName, salonPhone);
       
       let imageCaption = (userLang === 'pt') ? "Aqui está o layout do seu post personalizado!" : "Here is your custom sample layout!";
@@ -224,73 +222,50 @@ app.post('/webhook', async (req, res) => {
       if (previewAsset) {
         remoteImgUrl = previewAsset.imageUrl || null;
         let shortHook = previewAsset.hook ? '' + previewAsset.hook + '\n\n' : '';
-        
         let openingLine = '';
         if (previewAsset.caption) {
           const cleanCaption = previewAsset.caption.trim();
           const firstPeriodIndex = cleanCaption.indexOf('.');
-          if (firstPeriodIndex !== -1) {
-            openingLine = cleanCaption.substring(0, firstPeriodIndex + 1);
-          } else {
-            openingLine = cleanCaption.split('\n')[0];
-          }
+          openingLine = (firstPeriodIndex !== -1) ? cleanCaption.substring(0, firstPeriodIndex + 1) : cleanCaption.split('\n')[0];
         }
         imageCaption = shortHook + openingLine;
       }
 
-      await sendWhatsApp(from, imageCaption, remoteImgUrl);
+      await sendWhatsApp(cleanFrom, imageCaption, remoteImgUrl);
+      const satisfactionMsg = (userLang === 'pt') ? "Você gostou desse post?\n\n1. Sim\n2. Não" : "Are you happy with this post?\n\n1. Yes\n2. No";
+      await sendWhatsApp(cleanFrom, satisfactionMsg);
       
-      const satisfactionMsg = (userLang === 'pt')
-        ? "Você gostou desse post?\n\n1. Sim\n2. Não"
-        : "Are you happy with this post?\n\n1. Yes\n2. No";
-      await sendWhatsApp(from, satisfactionMsg);
-      
-      sessionSteps.set(from, 'satisfaction_pending');
-      backgroundSyncDB(from, { step: 'satisfaction_pending', lang: userLang });
+      sessionSteps.set(cleanFrom, 'satisfaction_pending');
+      backgroundSyncDB(cleanFrom, { step: 'satisfaction_pending', lang: userLang });
       return;
     }
     
-    // ─── STEP 5: PACKAGE OPTION CLOSE ────────────────────────────────────────
     if (localStep === 'satisfaction_pending') {
-      sessionSteps.set(from, 'package_pending');
-      backgroundSyncDB(from, { step: 'package_pending', lang: userLang });
-      
-      const msg = (userLang === 'pt')
-        ? "Você prefere o Pacote de 6 posts ou o Pacote de 20 posts?\n\n1. 6 Posts\n2. 20 Posts"
-        : "Do you want 6 posts or 20 posts?\n\n1. 6 Posts\n2. 20 Posts";
-      await sendWhatsApp(from, msg);
+      sessionSteps.set(cleanFrom, 'package_pending');
+      backgroundSyncDB(cleanFrom, { step: 'package_pending', lang: userLang });
+      const msg = (userLang === 'pt') ? "Você prefere o Pacote de 6 posts ou o Pacote de 20 posts?\n\n1. 6 Posts\n2. 20 Posts" : "Do you want 6 posts or 20 posts?\n\n1. 6 Posts\n2. 20 Posts";
+      await sendWhatsApp(cleanFrom, msg);
       return;
     }
     
     if (localStep === 'package_pending') {
       let linkTarget = "https://brandsignl.com/nails/confirm";
       let chosenLabel = "6 Posts";
-      
-      if (text === '2') {
-        linkTarget = "https://brandsignl.com/nails/premium-bundle";
-        chosenLabel = "20 Posts";
-      }
-
+      if (text === '2') { linkTarget = "https://brandsignl.com/nails/premium-bundle"; chosenLabel = "20 Posts"; }
       if (userLang === 'pt') {
         linkTarget = (text === '2') ? "https://pay.hotmart.com/W105949535S?checkoutMode=10" : "https://pay.hotmart.com/W105949535S";
         chosenLabel = (text === '2') ? "20 Posts" : "6 Posts";
       }
-
-      const closeMsg = (userLang === 'pt')
-        ? "Perfeito! Seu pacote de " + chosenLabel + " está reservado.\n\n👉 Conclua seu pagamento seguro via Pix aqui:\n" + linkTarget
-        : "Perfect! Your package for " + chosenLabel + " is reserved.\n\n👉 Complete checkout here:\n" + linkTarget;
-
-      await sendWhatsApp(from, closeMsg);
-      sessionSteps.set(from, 'awaiting_payment');
-      backgroundSyncDB(from, { step: 'awaiting_payment', lang: userLang });
+      const closeMsg = (userLang === 'pt') ? "Perfeito! Seu pacote de " + chosenLabel + " está reservado.\n\n👉 Conclua seu pagamento seguro via Pix aqui:\n" + linkTarget : "Perfect! Your package for " + chosenLabel + " is reserved.\n\n👉 Complete checkout here:\n" + linkTarget;
+      await sendWhatsApp(cleanFrom, closeMsg);
+      sessionSteps.set(cleanFrom, 'awaiting_payment');
+      backgroundSyncDB(cleanFrom, { step: 'awaiting_payment', lang: userLang });
       return;
     }
     
     if (localStep === 'awaiting_payment') {
-      const lockMsg = (userLang === 'pt')
-        ? "Seu pedido está reservado com segurança! Assim que o Pix for confirmado, seu link de acesso exclusivo será enviado direto aqui neste chat."
-        : "Your order is securely reserved. Once checkout completes, your layout link drops here.";
-      await sendWhatsApp(from, lockMsg);
+      const lockMsg = (userLang === 'pt') ? "Seu pedido está reservado com segurança! Assim que o Pix for confirmado, seu link de acesso exclusivo será enviado direto aqui neste chat." : "Your order is securely reserved. Once checkout completes, your layout link drops here.";
+      await sendWhatsApp(cleanFrom, lockMsg);
       return;
     }
 
@@ -299,10 +274,5 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// ─── CLEAN FALLBACKS & STARTUP LISTENERS ─────────────────────────────────────
 app.use((req, res) => res.status(404).send('Not found'));
-
-process.on('uncaughtException', (err) => console.error('Bot Global Exception: ' + err.message));
-process.on('unhandledRejection', (reason) => console.error('Bot Global Rejection: ' + reason));
-
 app.listen(PORT, '0.0.0.0', () => console.log('SERVER READY ON PORT ' + PORT));
