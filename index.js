@@ -12,7 +12,8 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-console.log('STARTUP: Multi-Language Engine Staging Safe Running');
+console.log('STARTUP: Hardlocked Instance Protection Engine Live');
+console.log('ACTIVE PROTECTED INSTANCE SLOT: ' + EVOLUTION_INSTANCE);
 
 app.get('/', (req, res) => res.status(200).send('BrandSignl Local State Overrides — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
@@ -46,7 +47,7 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     });
     return response.data;
   } catch (err) {
-    console.error('Bot Dispatch Error: ' + err.message);
+    console.error('Bot WhatsApp Dispatch Error: ' + err.message);
     return null;
   }
 }
@@ -77,11 +78,18 @@ async function getLivePreview(niche, brandName, brandPhone) {
 }
 
 app.post('/webhook', async (req, res) => {
+  // Always answer the webhook immediately
   res.status(200).send('ok');
 
   try {
     const body = req.body;
     if (!body || body.event !== 'messages.upsert') return;
+
+    // 🔒 EXTRA SHIELD: Validate that the payload matches your specific active instance variable
+    const incomingInstance = body.instance || '';
+    if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) {
+      return; // Instantly drops the message if it leaked from one of the disconnected instances
+    }
 
     const data = body.data;
     if (!data || !data.key || !data.message) return;
@@ -105,7 +113,7 @@ app.post('/webhook', async (req, res) => {
     const ALLOWED_TESTER = '27833272007'; 
     if (from !== ALLOWED_TESTER) return;
 
-    console.log('Engine Parser Execution -> From: ' + from + ' Text: ' + text);
+    console.log('Engine Parser Execution [Instance Validated] -> Text: ' + text);
 
     let stateData = await syncLeadState(from);
     let localStep = stateData && stateData.lead ? stateData.lead.step : 'new';
@@ -113,13 +121,12 @@ app.post('/webhook', async (req, res) => {
     
     const inputLower = text.toLowerCase();
     
-    // Check if the user initiated an explicit state wipe via initial keywords
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       localStep = 'new';
       userLang = detectLang(text);
     }
 
-    console.log('Current Computed Step Segment Location is: [' + localStep + '] Mode: [' + userLang + ']');
+    console.log('Current Step Location: [' + localStep + '] Mode: [' + userLang + ']');
 
     // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
     if (localStep === 'new') {
@@ -142,7 +149,6 @@ app.post('/webhook', async (req, res) => {
         await sendWhatsApp(from, msg);
         await syncLeadState(from, { step: 'new' });
       } else {
-        // Enforce the sync parameters to save database states cleanly
         await syncLeadState(from, { step: 'niche_pending' });
         
         const msg = (userLang === 'pt')
