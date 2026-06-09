@@ -263,3 +263,23 @@ app.post('/webhook', async (req, res) => {
         linkTarget = (text === '2') ? "https://pay.hotmart.com/W105949535S?checkoutMode=10" : "https://pay.hotmart.com/W105949535S";
         chosenLabel = (text === '2') ? "20 Posts" : "6 Posts";
       }
+      const closeMsg = (userLang === 'pt') ? "Perfeito! Seu pacote de " + chosenLabel + " está reservado.\n\n👉 Conclua seu pagamento seguro via Pix aqui:\n" + linkTarget : "Perfect! Your package for " + chosenLabel + " is securely reserved.\n\n👉 Complete checkout here:\n" + linkTarget;
+      await sendWhatsApp(cleanFrom, closeMsg);
+      sessionSteps.set(cleanFrom, 'awaiting_payment');
+      backgroundSyncDB(cleanFrom, { step: 'awaiting_payment', lang: userLang });
+      return;
+    }
+    
+    if (localStep === 'awaiting_payment') {
+      const lockMsg = (userLang === 'pt') ? "Seu pedido está reservado com segurança! Assim que o Pix for confirmado, seu link de acesso exclusivo será enviado direto aqui neste chat." : "Your order is securely reserved. Once checkout completes, your custom high-converting content pack download link drops right here in this chat.";
+      await sendWhatsApp(cleanFrom, lockMsg);
+      return;
+    }
+
+  } catch (err) {
+    console.error('Webhook Loop Error: ' + err.message);
+  }
+});
+
+app.use((req, res) => res.status(404).send('Not found'));
+app.listen(PORT, '0.0.0.0', () => console.log('SERVER READY ON PORT ' + PORT));
