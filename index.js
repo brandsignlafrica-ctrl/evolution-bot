@@ -12,26 +12,24 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-// 🧠 IN-MEMORY DEDUPLICATION CACHE
+// 🧠 IN-MEMORY TIMEOUT CACHE TO DEDUPLICATE EXTRA NETWORK HIT PAYLOADS
 const processedMessages = new Map();
-
-// Clean up old message IDs from memory every 60 seconds to prevent leaks
 setInterval(() => {
   const now = Date.now();
   for (const [msgId, timestamp] of processedMessages.entries()) {
-    if (now - timestamp > 10000) { // 10 seconds expiration
+    if (now - timestamp > 10000) {
       processedMessages.delete(msgId);
     }
   }
 }, 60000);
 
-console.log('STARTUP: Anti-Duplicate Deduplication Engine Online');
+console.log('STARTUP: PRODUCTION ENGINE MULTI-LANGUAGE LIVE RUNNING');
 
-app.get('/', (req, res) => res.status(200).send('BrandSignl Deduper — OK'));
+app.get('/', (req, res) => res.status(200).send('BrandSignl Production Engine — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 function detectLang(text) {
-  const pt = /\b(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad|quero|preciso|meu|minha|como|você|voce|por favor|ajuda|cabelo|unhas|cílios|sobrancelha|manicure|manicura)\b/i;
+  const pt = /\b(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad|quero|preciso|meu|minha|como|você|voce|por favor|ajuda|cabelo|unhas|cílios|sobrancelha|manicure|manicura|sim|nao|não)\b/i;
   if (pt.test(text)) return 'pt';
   return 'en';
 }
@@ -105,13 +103,9 @@ app.post('/webhook', async (req, res) => {
     if (!data || !data.key || !data.message) return;
     if (data.key.fromMe === true) return;
 
-    // 🔒 UNIQUE MESSAGE ID DEDUPLICATION SHIELD
     const messageId = data.key.id || '';
     if (messageId) {
-      if (processedMessages.has(messageId)) {
-        console.log('🛡️ [DEDUPLICATOR] Dropped duplicate hit for message ID: ' + messageId);
-        return; // Exits instantly. The second hit never touches the code engine!
-      }
+      if (processedMessages.has(messageId)) return; 
       processedMessages.set(messageId, Date.now());
     }
 
@@ -129,24 +123,32 @@ app.post('/webhook', async (req, res) => {
 
     if (!from || !text) return;
 
-    // 🔒 STRICT INBOUND LOCKDOWN GUARD (Staging Device Only)
-    const ALLOWED_TESTER = '27833272007'; 
-    if (from !== ALLOWED_TESTER) return;
-
-    console.log('Engine Parser Execution [Instance Validated] -> Text: ' + text);
+    console.log('--- PROCESSING LIVE INBOUND CLIENT PAYLOAD ---');
+    console.log('Sender: ' + from + ' | Message: ' + text);
 
     let stateData = await syncLeadState(from);
-    let localStep = stateData && stateData.lead ? stateData.lead.step : 'new';
-    let userLang = stateData && stateData.lead && stateData.lead.lang ? stateData.lead.lang : detectLang(text);
+    let localStep = 'new';
+    let userLang = detectLang(text);
+
+    if (stateData && stateData.lead) {
+      if (stateData.lead.step) localStep = stateData.lead.step;
+      if (stateData.lead.lang) userLang = stateData.lead.lang;
+    }
     
     const inputLower = text.toLowerCase();
     
+    // Catch entry keywords to drop current sessions back to entry gate safely
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       localStep = 'new';
       userLang = detectLang(text);
+      console.log('Session reset token mapped for client phone thread: ' + from);
     }
 
-    console.log('Current Step Location: [' + localStep + '] Mode: [' + userLang + ']');
+    if ((inputLower === '1' || inputLower === 'sim') && localStep === 'new') {
+      userLang = 'pt';
+    }
+
+    console.log('Session Execution Context -> Step: [' + localStep + '] Language: [' + userLang + ']');
 
     // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
     if (localStep === 'new') {
@@ -162,14 +164,14 @@ app.post('/webhook', async (req, res) => {
     
     // ─── STEP 2: NICHE SELECTOR ──────────────────────────────────────────────
     if (localStep === 'qualify_pending') {
-      if (text === '2') {
+      if (text === '2' || inputLower.includes('navegando') || inputLower.includes('browsing')) {
         const msg = (userLang === 'pt') 
           ? "Sem problemas! Nos avise se mudar de ideia mais tarde." 
           : "No problem! Let us know if things change.";
         await sendWhatsApp(from, msg);
         await syncLeadState(from, { step: 'new' });
       } else {
-        await syncLeadState(from, { step: 'niche_pending' });
+        await syncLeadState(from, { step: 'niche_pending', lang: userLang });
         
         const msg = (userLang === 'pt')
           ? "Excelente! Qual é o seu nicho?\n\n1. Unhas\n2. Cabelo\n3. Cílios"
@@ -182,10 +184,10 @@ app.post('/webhook', async (req, res) => {
     // ─── STEP 3: BRAND METADATA INTAKE ───────────────────────────────────────
     if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
-      if (text === '2') activeNiche = 'hair';
-      if (text === '3') activeNiche = 'lashes';
+      if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
+      if (text === '3' || inputLower.includes('cílios') || inputLower.includes('lashes')) activeNiche = 'lashes';
 
-      await syncLeadState(from, { niche: activeNiche, step: 'branding_pending' });
+      await syncLeadState(from, { niche: activeNiche, step: 'branding_pending', lang: userLang });
       
       const msg = (userLang === 'pt')
         ? "Para criarmos sua amostra, por favor envie o Nome da sua Empresa e o Número de Contato."
@@ -206,7 +208,7 @@ app.post('/webhook', async (req, res) => {
         : "Generating your custom branded sample post now... ⚡";
       await sendWhatsApp(from, workingMsg);
 
-      const currentNiche = stateData && stateData.lead ? stateData.lead.niche : 'nails';
+      const currentNiche = (stateData && stateData.lead && stateData.lead.niche) ? stateData.lead.niche : 'nails';
       const previewAsset = await getLivePreview(currentNiche, salonName, salonPhone);
       
       let imageCaption = (userLang === 'pt') ? "Aqui está o layout do seu post personalizado!" : "Here is your custom sample layout!";
@@ -236,13 +238,13 @@ app.post('/webhook', async (req, res) => {
         : "Are you happy with this post?\n\n1. Yes\n2. No";
       await sendWhatsApp(from, satisfactionMsg);
       
-      await syncLeadState(from, { step: 'satisfaction_pending' });
+      await syncLeadState(from, { step: 'satisfaction_pending', lang: userLang });
       return;
     }
     
     // ─── STEP 5: PACKAGE OPTION CLOSE ────────────────────────────────────────
     if (localStep === 'satisfaction_pending') {
-      await syncLeadState(from, { step: 'package_pending' });
+      await syncLeadState(from, { step: 'package_pending', lang: userLang });
       
       const msg = (userLang === 'pt')
         ? "Você prefere o Pacote de 6 posts ou o Pacote de 20 posts?\n\n1. 6 Posts\n2. 20 Posts"
@@ -270,7 +272,7 @@ app.post('/webhook', async (req, res) => {
         : "Perfect! Your package for " + chosenLabel + " is reserved.\n\n👉 Complete checkout here:\n" + linkTarget;
 
       await sendWhatsApp(from, closeMsg);
-      await syncLeadState(from, { step: 'awaiting_payment' });
+      await syncLeadState(from, { step: 'awaiting_payment', lang: userLang });
       return;
     }
     
