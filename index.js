@@ -12,6 +12,12 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
+// 🧠 LIVE RUNTIME MEMORY STORAGE
+const sessionSteps = new Map();
+const sessionLangs = new Map();
+const sessionNiches = new Map();
+
+// In-Memory Timeout Cache to drop extra network hits
 const processedMessages = new Map();
 setInterval(() => {
   const now = Date.now();
@@ -20,9 +26,10 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: High-Visibility Tracking Engine Online');
+console.log('STARTUP: Fast RAM Memory Tracking Engine Initializing...');
 
-app.get('/', (req, res) => res.status(200).send('BrandSignl Logger — OK'));
+// ─── CORE SYSTEM ROUTES ──────────────────────────────────────────────────────
+app.get('/', (req, res) => res.status(200).send('BrandSignl Memory Engine — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 function detectLang(text) {
@@ -59,14 +66,12 @@ async function sendWhatsApp(number, text, imageUrl = null) {
   }
 }
 
-async function syncLeadState(phone, updates = {}) {
+async function backgroundSyncDB(phone, updates = {}) {
   try {
     const url = BRANDSIGNL_URL + '/api/wa-lead';
-    const res = await axios.post(url, { phone, ...updates }, { timeout: 10000 });
-    return res.data;
+    await axios.post(url, { phone, ...updates }, { timeout: 5000 });
   } catch (err) {
-    console.error('Backend API Sync Error: ' + err.message);
-    return null;
+    console.error('Non-Blocking DB Sync Notification: ' + err.message);
   }
 }
 
@@ -84,20 +89,14 @@ async function getLivePreview(niche, brandName, brandPhone) {
   }
 }
 
+// ─── WEBHOOK ROUTER HANDLER ──────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
-  // 🔥 CRITICAL DEBUG LINE: Log the exact second ANY hit touches our URL
   console.log('🚨 WEBHOOK HIT AT:', new Date().toISOString());
-  
   res.status(200).send('ok');
 
   try {
     const body = req.body;
-    if (!body) return;
-    
-    // Log basic payload metrics so we can see incoming events raw
-    console.log(Payload Event Type: [${body.event}] from Instance: [${body.instance}]);
-
-    if (body.event !== 'messages.upsert') return;
+    if (!body || body.event !== 'messages.upsert') return;
 
     const incomingInstance = body.instance || '';
     if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) return; 
@@ -127,37 +126,36 @@ app.post('/webhook', async (req, res) => {
 
     if (!from || !text) return;
 
-    // 🔒 STRICT INBOUND LOCKDOWN GUARD (Staging Device Only)
+    // 🔒 STRICT LOCKDOWN ENFORCED (Only your test device responds)
     const ALLOWED_TESTER = '27833272007'; 
     if (from !== ALLOWED_TESTER) return;
 
-    console.log('🎯 PROCESSING LIVE INBOUND CLIENT -> From: ' + from + ' | Message: ' + text);
+    console.log('🎯 RUNNING FOR ALLOWED TESTER -> Text: ' + text);
 
-    let stateData = await syncLeadState(from);
-    let localStep = 'new';
-    let userLang = detectLang(text);
-
-    if (stateData && stateData.lead) {
-      if (stateData.lead.step) localStep = stateData.lead.step;
-      if (stateData.lead.lang) userLang = stateData.lead.lang;
-    }
+    let localStep = sessionSteps.get(from) || 'new';
+    let userLang = sessionLangs.get(from) || detectLang(text);
     
     const inputLower = text.toLowerCase();
     
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       localStep = 'new';
       userLang = detectLang(text);
+      sessionSteps.set(from, 'new');
+      sessionLangs.set(from, userLang);
     }
 
     if ((inputLower === '1' || inputLower === 'sim') && localStep === 'new') {
       userLang = 'pt';
+      sessionLangs.set(from, 'pt');
     }
 
-    console.log('Funnel Processing -> Step: [' + localStep + '] Language: [' + userLang + ']');
+    console.log('Memory Processing State Validation -> Step: [' + localStep + '] Language: [' + userLang + ']');
 
     // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
     if (localStep === 'new') {
-      await syncLeadState(from, { step: 'qualify_pending', lang: userLang });
+      sessionSteps.set(from, 'qualify_pending');
+      sessionLangs.set(from, userLang);
+      backgroundSyncDB(from, { step: 'qualify_pending', lang: userLang });
       
       const msg = (userLang === 'pt') 
         ? "Você é um profissional da beleza buscando mais clientes?\n\n1. Sim\n2. Apenas navegando"
@@ -174,9 +172,11 @@ app.post('/webhook', async (req, res) => {
           ? "Sem problemas! Nos avise se mudar de ideia mais tarde." 
           : "No problem! Let us know if things change.";
         await sendWhatsApp(from, msg);
-        await syncLeadState(from, { step: 'new' });
+        sessionSteps.set(from, 'new');
+        backgroundSyncDB(from, { step: 'new' });
       } else {
-        await syncLeadState(from, { step: 'niche_pending', lang: userLang });
+        sessionSteps.set(from, 'niche_pending');
+        backgroundSyncDB(from, { step: 'niche_pending', lang: userLang });
         
         const msg = (userLang === 'pt')
           ? "Excelente! Qual é o seu nicho?\n\n1. Unhas\n2. Cabelo\n3. Cílios"
@@ -192,7 +192,9 @@ app.post('/webhook', async (req, res) => {
       if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
       if (text === '3' || inputLower.includes('cílios') || inputLower.includes('lashes')) activeNiche = 'lashes';
 
-      await syncLeadState(from, { niche: activeNiche, step: 'branding_pending', lang: userLang });
+      sessionNiches.set(from, activeNiche);
+      sessionSteps.set(from, 'branding_pending');
+      backgroundSyncDB(from, { niche: activeNiche, step: 'branding_pending', lang: userLang });
       
       const msg = (userLang === 'pt')
         ? "Para criarmos sua amostra, por favor envie o Nome da sua Empresa e o Número de Contato."
@@ -213,7 +215,7 @@ app.post('/webhook', async (req, res) => {
         : "Generating your custom branded sample post now... ⚡";
       await sendWhatsApp(from, workingMsg);
 
-      const currentNiche = (stateData && stateData.lead && stateData.lead.niche) ? stateData.lead.niche : 'nails';
+      const currentNiche = sessionNiches.get(from) || 'nails';
       const previewAsset = await getLivePreview(currentNiche, salonName, salonPhone);
       
       let imageCaption = (userLang === 'pt') ? "Aqui está o layout do seu post personalizado!" : "Here is your custom sample layout!";
@@ -243,13 +245,15 @@ app.post('/webhook', async (req, res) => {
         : "Are you happy with this post?\n\n1. Yes\n2. No";
       await sendWhatsApp(from, satisfactionMsg);
       
-      await syncLeadState(from, { step: 'satisfaction_pending', lang: userLang });
+      sessionSteps.set(from, 'satisfaction_pending');
+      backgroundSyncDB(from, { step: 'satisfaction_pending', lang: userLang });
       return;
     }
     
     // ─── STEP 5: PACKAGE OPTION CLOSE ────────────────────────────────────────
     if (localStep === 'satisfaction_pending') {
-      await syncLeadState(from, { step: 'package_pending', lang: userLang });
+      sessionSteps.set(from, 'package_pending');
+      backgroundSyncDB(from, { step: 'package_pending', lang: userLang });
       
       const msg = (userLang === 'pt')
         ? "Você prefere o Pacote de 6 posts ou o Pacote de 20 posts?\n\n1. 6 Posts\n2. 20 Posts"
@@ -277,7 +281,8 @@ app.post('/webhook', async (req, res) => {
         : "Perfect! Your package for " + chosenLabel + " is reserved.\n\n👉 Complete checkout here:\n" + linkTarget;
 
       await sendWhatsApp(from, closeMsg);
-      await syncLeadState(from, { step: 'awaiting_payment', lang: userLang });
+      sessionSteps.set(from, 'awaiting_payment');
+      backgroundSyncDB(from, { step: 'awaiting_payment', lang: userLang });
       return;
     }
     
@@ -294,6 +299,7 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// ─── CLEAN FALLBACKS & STARTUP LISTENERS ─────────────────────────────────────
 app.use((req, res) => res.status(404).send('Not found'));
 
 process.on('uncaughtException', (err) => console.error('Bot Global Exception: ' + err.message));
