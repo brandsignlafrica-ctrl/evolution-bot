@@ -24,7 +24,7 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: Unlocked Live Production Engine Online');
+console.log('STARTUP: Live Production Engine Online (With Tracking Lights)');
 
 app.get('/', (req, res) => res.status(200).send('BrandSignl Active — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
@@ -62,16 +62,17 @@ async function sendWhatsApp(number, text, imageUrl = null) {
       headers: { apikey: EVOLUTION_API_KEY },
       timeout: 15000
     });
+    console.log('✅ WhatsApp Dispatch Success: -> ' + number);
     return response.data;
   } catch (err) {
-    console.error('Bot WhatsApp Dispatch Error: ' + err.message);
-    // Fallback: Send text if image fails
+    console.error('❌ Bot WhatsApp Dispatch Error: ' + err.message);
     if (imageUrl) {
       try {
+        console.log('⚠️ Attempting Text Fallback for: ' + number);
         const fallbackUrl = EVOLUTION_API_URL + '/message/sendText/' + EVOLUTION_INSTANCE;
         await axios.post(fallbackUrl, { number: number, text: String(text) }, { headers: { apikey: EVOLUTION_API_KEY }, timeout: 10000 });
       } catch (fallbackErr) {
-        console.error('Fallback Text Dispatch Failed: ' + fallbackErr.message);
+        console.error('❌ Fallback Text Dispatch Failed: ' + fallbackErr.message);
       }
     }
     return null;
@@ -106,10 +107,17 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const body = req.body;
-    if (!body || body.event !== 'messages.upsert') return;
+    if (!body) return;
+    
+    if (body.event !== 'messages.upsert') return;
+    
+    console.log('🚨 INBOUND WEBHOOK -> Event: ' + body.event + ' | Instance: ' + body.instance);
 
     const incomingInstance = body.instance || '';
-    if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) return; 
+    if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) {
+      console.log('❌ MISMATCH BLOCK: Env string is [' + EVOLUTION_INSTANCE + '] but payload string is [' + incomingInstance + ']. Dropping payload.');
+      return; 
+    }
 
     const data = body.data;
     if (!data || !data.key || !data.message) return;
@@ -138,13 +146,12 @@ app.post('/webhook', async (req, res) => {
 
     if (!rawFrom || !text) return;
 
-    // 🔓 LOCKDOWN REMOVED: Bot now accepts all incoming phone numbers instantly.
+    console.log('🎯 PROCESSING MESSAGE -> From: [' + cleanFrom + '] | Text: [' + text + ']');
 
     let localStep = sessionSteps.get(cleanFrom) || 'new';
     let userLang = sessionLangs.get(cleanFrom) || detectLang(text);
     const inputLower = text.toLowerCase();
     
-    // Keyword Override
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       localStep = 'new';
       userLang = detectLang(text);
@@ -157,7 +164,6 @@ app.post('/webhook', async (req, res) => {
       sessionLangs.set(cleanFrom, 'pt');
     }
 
-    // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
     if (localStep === 'new') {
       sessionSteps.set(cleanFrom, 'qualify_pending');
       sessionLangs.set(cleanFrom, userLang);
@@ -171,7 +177,6 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 2: NICHE SELECTOR ──────────────────────────
     if (localStep === 'qualify_pending') {
       if (text === '2' || inputLower.includes('navegando') || inputLower.includes('browsing')) {
         const msg = (userLang === 'pt') ? "Sem problemas! Nos avise se mudar de ideia mais tarde." : "No problem! Let us know if things change.";
@@ -187,7 +192,6 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 3: BRAND METADATA INTAKE + ALGORITHMIC PITCH ───────────────────
     if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
       if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
@@ -205,7 +209,6 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 4: PREVIEW DELIVERY & FEEDBACK ─────────────────────────────────
     if (localStep === 'branding_pending') {
       const segments = text.includes(',') ? text.split(',') : [text, ''];
       const salonName = segments[0] ? segments[0].trim() : "My Salon";
@@ -242,7 +245,6 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 5: PACKAGE OPTION CLOSE ────────────────────────────────────────
     if (localStep === 'satisfaction_pending') {
       sessionSteps.set(cleanFrom, 'package_pending');
       backgroundSyncDB(cleanFrom, { step: 'package_pending', lang: userLang });
