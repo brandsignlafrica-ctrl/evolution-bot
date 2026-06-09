@@ -25,7 +25,7 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: Diagnostic Lockdown Engine Online');
+console.log('STARTUP: Fixed Diagnostic Lockdown Engine Online');
 
 app.get('/', (req, res) => res.status(200).send('BrandSignl Diagnostics — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
@@ -88,7 +88,6 @@ async function getLivePreview(niche, brandName, brandPhone) {
 }
 
 app.post('/webhook', async (req, res) => {
-  // Always acknowledge the incoming hit instantly
   res.status(200).send('ok');
 
   try {
@@ -112,7 +111,6 @@ app.post('/webhook', async (req, res) => {
     const remoteJid = data.key.remoteJid || '';
     if (remoteJid.endsWith('@g.us')) return;
 
-    // Extract the exact sender string value from the payload
     const rawFrom = remoteJid.split('@')[0].trim();
     const cleanFrom = rawFrom.replace(/\D/g, '').trim();
 
@@ -126,7 +124,7 @@ app.post('/webhook', async (req, res) => {
 
     if (!rawFrom || !text) return;
 
-    // 🔥 HIGH-VISIBILITY DIAGNOSTIC LOGS
+    // 🔥 FIXED HIGH-VISIBILITY DIAGNOSTIC LOGS
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🔍 INBOUND MESSAGE DETECTED');
     console.log('👉 RAW FROM PAYLOAD:      ', "'" + rawFrom + "'");
@@ -137,7 +135,7 @@ app.post('/webhook', async (req, res) => {
     // 🔒 THE GUARD GATE CHECK
     const ALLOWED_TESTER = '27833272007'; 
     if (cleanFrom !== ALLOWED_TESTER && rawFrom !== ALLOWED_TESTER) {
-      console.log(❌ BLOCK: Sender did not match ALLOWED_TESTER. Dropping message.);
+      console.log('❌ BLOCK: Sender did not match ALLOWED_TESTER. Dropping message.');
       return;
     }
 
@@ -147,7 +145,6 @@ app.post('/webhook', async (req, res) => {
     let userLang = sessionLangs.get(cleanFrom) || detectLang(text);
     const inputLower = text.toLowerCase();
     
-    // Keyword Override Reset Gate
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       userLang = detectLang(text);
       sessionSteps.set(cleanFrom, 'qualify_pending');
@@ -162,7 +159,6 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
-    // Funnel Execution mapping logic...
     if (localStep === 'new') {
       sessionSteps.set(cleanFrom, 'qualify_pending');
       sessionLangs.set(cleanFrom, userLang);
