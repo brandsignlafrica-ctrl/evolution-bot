@@ -23,9 +23,9 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: PRODUCTION ENGINE MULTI-LANGUAGE LIVE RUNNING');
+console.log('STARTUP: Production Incoming-Only Message Filter Online');
 
-app.get('/', (req, res) => res.status(200).send('BrandSignl Production Engine — OK'));
+app.get('/', (req, res) => res.status(200).send('BrandSignl Filtered Engine — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 function detectLang(text) {
@@ -88,10 +88,13 @@ async function getLivePreview(niche, brandName, brandPhone) {
 }
 
 app.post('/webhook', async (req, res) => {
+  // Always answer the webhook immediately
   res.status(200).send('ok');
 
   try {
     const body = req.body;
+    
+    // 🛑 FILTER 1: ONLY accept message creation payloads. Drop receipts or status changes.
     if (!body || body.event !== 'messages.upsert') return;
 
     const incomingInstance = body.instance || '';
@@ -101,7 +104,12 @@ app.post('/webhook', async (req, res) => {
 
     const data = body.data;
     if (!data || !data.key || !data.message) return;
+
+    // 🛑 FILTER 2: If the message came from the bot itself (outgoing response), DROP IT instantly.
     if (data.key.fromMe === true) return;
+    
+    // 🛑 FILTER 3: Drop message update notifications or empty text configurations
+    if (body.data.status || body.data.update) return;
 
     const messageId = data.key.id || '';
     if (messageId) {
@@ -123,8 +131,12 @@ app.post('/webhook', async (req, res) => {
 
     if (!from || !text) return;
 
-    console.log('--- PROCESSING LIVE INBOUND CLIENT PAYLOAD ---');
-    console.log('Sender: ' + from + ' | Message: ' + text);
+    // 🔒 STRICT INBOUND LOCKDOWN GUARD (Staging Device Only)
+    const ALLOWED_TESTER = '27833272007'; 
+    if (from !== ALLOWED_TESTER) return;
+
+    console.log('--- CLEAN INBOUND USER MESSAGE PARSED ---');
+    console.log('From: ' + from + ' | Message: ' + text);
 
     let stateData = await syncLeadState(from);
     let localStep = 'new';
@@ -137,18 +149,17 @@ app.post('/webhook', async (req, res) => {
     
     const inputLower = text.toLowerCase();
     
-    // Catch entry keywords to drop current sessions back to entry gate safely
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       localStep = 'new';
       userLang = detectLang(text);
-      console.log('Session reset token mapped for client phone thread: ' + from);
+      console.log('Reset token caught. Reinitializing state paths.');
     }
 
     if ((inputLower === '1' || inputLower === 'sim') && localStep === 'new') {
       userLang = 'pt';
     }
 
-    console.log('Session Execution Context -> Step: [' + localStep + '] Language: [' + userLang + ']');
+    console.log('Verified Execution -> Step: [' + localStep + '] Language: [' + userLang + ']');
 
     // ─── STEP 1: QUALIFICATION GATE ──────────────────────────────────────────
     if (localStep === 'new') {
