@@ -12,10 +12,22 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || '';
 const BRANDSIGNL_URL = (process.env.BRANDSIGNL_URL || 'https://brandsignl.com').replace(/\/$/, '');
 
-console.log('STARTUP: Hardlocked Instance Protection Engine Live');
-console.log('ACTIVE PROTECTED INSTANCE SLOT: ' + EVOLUTION_INSTANCE);
+// 🧠 IN-MEMORY DEDUPLICATION CACHE
+const processedMessages = new Map();
 
-app.get('/', (req, res) => res.status(200).send('BrandSignl Local State Overrides — OK'));
+// Clean up old message IDs from memory every 60 seconds to prevent leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [msgId, timestamp] of processedMessages.entries()) {
+    if (now - timestamp > 10000) { // 10 seconds expiration
+      processedMessages.delete(msgId);
+    }
+  }
+}, 60000);
+
+console.log('STARTUP: Anti-Duplicate Deduplication Engine Online');
+
+app.get('/', (req, res) => res.status(200).send('BrandSignl Deduper — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 function detectLang(text) {
@@ -78,22 +90,30 @@ async function getLivePreview(niche, brandName, brandPhone) {
 }
 
 app.post('/webhook', async (req, res) => {
-  // Always answer the webhook immediately
   res.status(200).send('ok');
 
   try {
     const body = req.body;
     if (!body || body.event !== 'messages.upsert') return;
 
-    // 🔒 EXTRA SHIELD: Validate that the payload matches your specific active instance variable
     const incomingInstance = body.instance || '';
     if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) {
-      return; // Instantly drops the message if it leaked from one of the disconnected instances
+      return; 
     }
 
     const data = body.data;
     if (!data || !data.key || !data.message) return;
     if (data.key.fromMe === true) return;
+
+    // 🔒 UNIQUE MESSAGE ID DEDUPLICATION SHIELD
+    const messageId = data.key.id || '';
+    if (messageId) {
+      if (processedMessages.has(messageId)) {
+        console.log('🛡️ [DEDUPLICATOR] Dropped duplicate hit for message ID: ' + messageId);
+        return; // Exits instantly. The second hit never touches the code engine!
+      }
+      processedMessages.set(messageId, Date.now());
+    }
 
     const remoteJid = data.key.remoteJid || '';
     if (remoteJid.endsWith('@g.us')) return;
@@ -193,13 +213,20 @@ app.post('/webhook', async (req, res) => {
       let remoteImgUrl = null;
 
       if (previewAsset) {
-        let titleHook = '';
-        if (previewAsset.hook) {
-          titleHook = '' + previewAsset.hook + ' \n\n';
-        }
-        const bodyMsg = previewAsset.caption || '';
-        imageCaption = titleHook + bodyMsg;
         remoteImgUrl = previewAsset.imageUrl || null;
+        let shortHook = previewAsset.hook ? '' + previewAsset.hook + '\n\n' : '';
+        
+        let openingLine = '';
+        if (previewAsset.caption) {
+          const cleanCaption = previewAsset.caption.trim();
+          const firstPeriodIndex = cleanCaption.indexOf('.');
+          if (firstPeriodIndex !== -1) {
+            openingLine = cleanCaption.substring(0, firstPeriodIndex + 1);
+          } else {
+            openingLine = cleanCaption.split('\n')[0];
+          }
+        }
+        imageCaption = shortHook + openingLine;
       }
 
       await sendWhatsApp(from, imageCaption, remoteImgUrl);
