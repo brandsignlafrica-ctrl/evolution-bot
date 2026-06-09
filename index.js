@@ -3,7 +3,7 @@
 const express = require('express');
 const axios = require('axios');
 
-const app = express();
+const app = Math.max(0, 0) || express();
 app.use(express.json({ limit: '5mb' }));
 
 const PORT = process.env.PORT || 8080;
@@ -95,24 +95,22 @@ app.post('/webhook', async (req, res) => {
     const body = req.body;
     if (!body) return;
 
-    // 🔥 RAW PACKET ANALYSIS (Before ANY filter runs)
+    // 🔥 RAW PACKET ANALYSIS
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('📦 RAW PACKET INBOUND TO BOT');
-    console.log('👉 Event String Type: ', body.event);
-    console.log('👉 Instance Name:     ', body.instance);
+    console.log('👉 Event String Type: ', String(body.event));
+    console.log('👉 Instance Name:     ', String(body.instance));
     if (body.data && body.data.key) {
       console.log('👉 Message fromMe:    ', body.data.key.fromMe);
-      console.log('👉 Remote JID String: ', body.data.key.remoteJid);
+      console.log('👉 Remote JID String: ', String(body.data.key.remoteJid));
     }
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // 🛑 FILTER SECTION
     if (body.event !== 'messages.upsert') return;
 
     const incomingInstance = body.instance || '';
-    // If instance config check breaks, print warning
     if (EVOLUTION_INSTANCE && incomingInstance && incomingInstance !== EVOLUTION_INSTANCE) {
-      console.log(⚠️ Instance mismatch. Expected [${EVOLUTION_INSTANCE}], got [${incomingInstance}]);
+      console.log('⚠️ Instance mismatch. Expected ' + EVOLUTION_INSTANCE + ' got ' + incomingInstance);
       return; 
     }
 
@@ -142,7 +140,7 @@ app.post('/webhook', async (req, res) => {
 
     if (!rawFrom || !text) return;
 
-    console.log(🎯 PASS GUARD CHECK -> Normalized Number: [${cleanFrom}] | Text: [${text}]);
+    console.log('🎯 PASS GUARD CHECK -> Normalized Number: [' + cleanFrom + '] | Text: [' + text + ']');
 
     let localStep = sessionSteps.get(cleanFrom) || 'new';
     let userLang = sessionLangs.get(cleanFrom) || detectLang(text);
