@@ -24,7 +24,7 @@ setInterval(() => {
   }
 }, 60000);
 
-console.log('STARTUP: Branded Visual Layout Funnel Engine Online');
+console.log('STARTUP: Unlocked Live Production Engine Online');
 
 app.get('/', (req, res) => res.status(200).send('BrandSignl Active — OK'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
@@ -65,6 +65,7 @@ async function sendWhatsApp(number, text, imageUrl = null) {
     return response.data;
   } catch (err) {
     console.error('Bot WhatsApp Dispatch Error: ' + err.message);
+    // Fallback: Send text if image fails
     if (imageUrl) {
       try {
         const fallbackUrl = EVOLUTION_API_URL + '/message/sendText/' + EVOLUTION_INSTANCE;
@@ -137,14 +138,13 @@ app.post('/webhook', async (req, res) => {
 
     if (!rawFrom || !text) return;
 
-    // 🔒 PERSONAL STAGING ISOLATION LOCK
-    const ALLOWED_TESTER = '27833272007'; 
-    if (cleanFrom !== ALLOWED_TESTER) return;
+    // 🔓 LOCKDOWN REMOVED: Bot now accepts all incoming phone numbers instantly.
 
     let localStep = sessionSteps.get(cleanFrom) || 'new';
     let userLang = sessionLangs.get(cleanFrom) || detectLang(text);
     const inputLower = text.toLowerCase();
     
+    // Keyword Override
     if (inputLower === 'reset' || inputLower === 'restart' || inputLower === 'nails' || inputLower === 'unhas' || inputLower === 'hair' || inputLower === 'cabelo' || inputLower === 'lashes') {
       localStep = 'new';
       userLang = detectLang(text);
@@ -171,7 +171,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 2: NICHE SELECTOR + ALGORITHMIC PITCH ──────────────────────────
+    // ─── STEP 2: NICHE SELECTOR ──────────────────────────
     if (localStep === 'qualify_pending') {
       if (text === '2' || inputLower.includes('navegando') || inputLower.includes('browsing')) {
         const msg = (userLang === 'pt') ? "Sem problemas! Nos avise se mudar de ideia mais tarde." : "No problem! Let us know if things change.";
@@ -187,7 +187,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
     
-    // ─── STEP 3: BRAND METADATA INTAKE ───────────────────────────────────────
+    // ─── STEP 3: BRAND METADATA INTAKE + ALGORITHMIC PITCH ───────────────────
     if (localStep === 'niche_pending') {
       let activeNiche = 'nails';
       if (text === '2' || inputLower.includes('cabelo') || inputLower.includes('hair')) activeNiche = 'hair';
