@@ -13,9 +13,10 @@ const ALLOWED_TESTER = '27833272007@s.whatsapp.net'; // Your personal testing Wh
 
 /**
  * 1. FORCE-BIND WEBHOOK ON STARTUP
- * Formatted for Evolution API v2.3.x global webhook configuration endpoint
+ * Uses standard string concatenation to prevent build environment crashes
  */
-const bindUrl = EVOLUTION_API_URL + '/webhook/configure';
+const encodedInstance = encodeURIComponent(INSTANCE_NAME);
+const bindUrl = EVOLUTION_API_URL + '/webhook/set/' + encodedInstance;
 
 fetch(bindUrl, {
   method: 'POST',
@@ -24,7 +25,6 @@ fetch(bindUrl, {
     'apikey': API_KEY
   },
   body: JSON.stringify({
-    instance: INSTANCE_NAME,
     url: 'https://evolution-bot-production.up.railway.app/webhook',
     enabled: true,
     webhookByEvents: true,
@@ -52,6 +52,7 @@ app.post('/webhook', async (req, res) => {
   try {
     const { event, data } = req.body;
 
+    // Fast-reply acknowledgment to stop webhook duplication/retries
     res.status(200).send({ status: 'received' });
 
     if (event !== 'MESSAGES_UPSERT') {
@@ -63,6 +64,7 @@ app.post('/webhook', async (req, res) => {
     if (!data || !data.key) return;
     if (data.key.fromMe === true) return; 
 
+    // Extract who sent the message from the payload body metadata
     const remoteJid = data.key.remoteJid;
 
     if (remoteJid !== ALLOWED_TESTER) {
@@ -94,7 +96,6 @@ app.post('/webhook', async (req, res) => {
  */
 async function sendWhatsAppText(toJid, textContent) {
   try {
-    const encodedInstance = encodeURIComponent(INSTANCE_NAME);
     const sendUrl = EVOLUTION_API_URL + '/message/sendText/' + encodedInstance;
     
     const response = await fetch(sendUrl, {
