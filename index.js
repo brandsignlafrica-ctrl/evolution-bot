@@ -13,10 +13,9 @@ const ALLOWED_TESTER = '27833272007@s.whatsapp.net'; // Your personal testing Wh
 
 /**
  * 1. FORCE-BIND WEBHOOK ON STARTUP
- * Concatenating strings cleanly with regular quotes to prevent syntax errors
+ * Formatted for Evolution API v2.3.x global webhook configuration endpoint
  */
-const encodedInstance = encodeURIComponent(INSTANCE_NAME);
-const bindUrl = EVOLUTION_API_URL + '/webhook/instance/' + encodedInstance;
+const bindUrl = EVOLUTION_API_URL + '/webhook/configure';
 
 fetch(bindUrl, {
   method: 'POST',
@@ -25,6 +24,7 @@ fetch(bindUrl, {
     'apikey': API_KEY
   },
   body: JSON.stringify({
+    instance: INSTANCE_NAME,
     url: 'https://evolution-bot-production.up.railway.app/webhook',
     enabled: true,
     webhookByEvents: true,
@@ -36,7 +36,7 @@ fetch(bindUrl, {
 })
 .then(response => response.json())
 .then(data => {
-  if (data.status === 400 || data.error) {
+  if (data.status === 400 || data.status === 404 || data.error) {
     console.error('❌ FORCE-BIND FAILED:', data);
   } else {
     console.log('✅ FORCE-BIND SUCCESS:', data);
@@ -91,10 +91,10 @@ app.post('/webhook', async (req, res) => {
 
 /**
  * 3. OUTBOUND API HELPER
- * No backticks here either—standard concatenation string construction
  */
 async function sendWhatsAppText(toJid, textContent) {
   try {
+    const encodedInstance = encodeURIComponent(INSTANCE_NAME);
     const sendUrl = EVOLUTION_API_URL + '/message/sendText/' + encodedInstance;
     
     const response = await fetch(sendUrl, {
