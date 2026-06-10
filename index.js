@@ -1,71 +1,101 @@
-import makeWASocket from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
-import axios from 'axios';
-import express from 'express';
-
+const express = require('express');
+const axios = require('axios');
+const fs = require('fs');
 const app = express();
 app.use(express.json());
 
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
-const API_KEY = process.env.API_KEY;
-const PORT = process.env.PORT || 3000; // Railway gives PORT automatically
+const EVOLUTION_URL = 'https://api.whatsapp.com';
+const EVOLUTION_KEY = 'YOUR_API_KEY_HERE';
+const INSTANCE = 'YOUR_INSTANCE_NAME';
+const HERO_IMAGE = '27283658664651159@id'; // replace with your media ID
 
-// 1 HERO IMAGE FOR WHOLE NICHE - BOT RULE
-const HERO_IMAGE = 'test123'; // temp test'; // Replace with your nails image ID
+// === PART 1: SAVE STATE TO FILE SO IT DOESN'T RESET ===
+const STATE_FILE = '/tmp/states.json';
+function loadStates() {
+  try { return JSON.parse(fs.readFileSync(STATE_FILE)); }
+  catch { return {}; }
+}
+function saveStates(s) {
+  fs.writeFileSync(STATE_FILE, JSON.stringify(s));
+}
+let userStates = loadStates();
 
-// Health check for Railway
-app.get('/', (req, res) => res.send('Bot Online'));
+// === SEND FUNCTIONS ===
+async function sendText(to, text) {
+  console.log(`SENDING TEXT to ${to}: ${text}`);
+  await axios.post(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`,
+    { number: to, textMessage: { text } },
+    { headers: { apikey: EVOLUTION_KEY } }
+  );
+}
 
-// Webhook from evolution-api
+async function sendImage(to, imageId, caption) {
+  console.log(`SENDING IMAGE to ${to}`);
+  await axios.post(`${EVOLUTION_URL}/message/sendMedia/${INSTANCE}`,
+    { number: to, mediaMessage: { mediaType: "image", media: imageId, caption } },
+    { headers: { apikey: EVOLUTION_KEY } }
+  );
+}
+
+// === WEBHOOK ===
 app.post('/webhook', async (req, res) => {
-    try {
-        const data = req.body.data;
-        if (!data?.message) return res.sendStatus(200);
-        
-        const sender = data.key.remoteJid;
-        const text = (data.message.conversation || '').toLowerCase().trim();
-        const pushName = data.pushName || 'Cliente';
-        
-        console.log(`Msg from ${pushName}: ${text}`);
-        
-        // DUMB BOT - NO AI, NO THINKING
-        if (text === '1' || text.includes('mostra') || text.includes('agenda')) {
-            await sendImage(sender, HERO_IMAGE, `Oi ${pushName}! 👇\n\nUnhas gel + decoração GRÁTIS\nSó 8 vagas esta semana!\n\n1. Quero agendar $35\n2. Ver outro modelo\n3. Passar`);
-        }
-        else if (text === '2') {
-            await sendText(sender, 'Outro modelo 👇\nManda "1" pra voltar');
-        }
-        else if (text === '3' || text.includes('passar')) {
-            await sendText(sender, 'Ok! Me chama quando quiser 😊');
-        }
-        else {
-            await sendText(sender, `Oi ${pushName}! 👋\n\n1. Ver promo unhas\n2. Outro modelo\n3. Passar`);
-        }
-        
-        res.sendStatus(200);
-    } catch (e) {
-        console.log('Error:', e.message);
-        res.sendStatus(200);
+  console.log('=== WEBHOOK HIT ===', new Date().toISOString());
+  console.log('BODY:', JSON.stringify(req.body));
+
+  try {
+    const data = req.body.data;
+    if (!data?.message?.conversation) return res.sendStatus(200);
+
+    const sender = data.key.remoteJid;
+    const text = data.message.conversation.toLowerCase().trim();
+    const pushName = data.pushName || 'Cliente';
+
+    console.log(`MSG from ${sender}: "${text}"`);
+    console.log('CURRENT STATE:', userStates[sender]);
+
+    // STEP 1: No state = ask name
+    if (!userStates[sender] || userStates[sender].step === 'new') {
+      userStates[sender] = { name: pushName, step: 'asked_name' };
+      saveStates(userStates);
+      await sendText(sender, `Oi ${pushName}! Qual é o seu nome? 😊`);
+      return res.sendStatus(200);
     }
+
+    // STEP 2: Got name = send offer
+    if (userStates[sender].step === 'asked_name') {
+      userStates[sender].name = text;
+      userStates[sender].step = 'sent_offer';
+      saveStates(userStates);
+
+      await sendImage(sender, HERO_IMAGE,
+        `Prazer ${text}! 👇\n\nUnhas gel + decoração GRÁTIS\nSó 8 vagas esta semana!\n\n1. Quero agendar $35\n2. Ver outro modelo\n3. Passar`
+      );
+      return res.sendStatus(200);
+    }
+
+    // STEP 3: Handle 1/2/3
+    if (text === '1') {
+      await sendText(sender, `Perfeito ${userStates[sender].name}! Me manda dia + horário que te encaixo 💅`);
+    }
+    else if (text === '2') {
+      await sendText(sender, `Te mando mais 2 modelos agora...`);
+    }
+    else if (text === '3') {
+      await sendText(sender, `Tranquilo ${userStates[sender].name}! Se mudar de ideia me chama.`);
+    }
+    else {
+      await sendText(sender, `Digite 1, 2 ou 3 ${userStates[sender].name} 😊`);
+    }
+
+    res.sendStatus(200);
+  } catch(e) {
+    console.error('=== ERROR CAUGHT ===', e.message);
+    res.sendStatus(200); // always 200 so evolution doesn't retry spam
+  }
 });
 
-async function sendText(jid, text) {
-    const number = jid.replace('@s.whatsapp.net', '');
-    await axios.post(`${WEBHOOK_URL}/message/sendText`, {
-        number,
-        textMessage: { text }
-    }, { headers: { apikey: API_KEY } });
-}
+// === PART 2: STOP SILENT CRASHES ===
+process.on('uncaughtException', err => console.log('CRASH:', err));
+process.on('unhandledRejection', err => console.log('PROMISE CRASH:', err));
 
-async function sendImage(jid, imageId, caption) {
-    const number = jid.replace('@s.whatsapp.net', '');
-    await axios.post(`${WEBHOOK_URL}/message/sendMedia`, {
-        number,
-        mediaMessage: {
-            media: { id: imageId },
-            caption
-        }
-    }, { headers: { apikey: API_KEY } });
-}
-
-app.listen(PORT, '0.0.0.0', () => console.log(`Bot Online na porta ${PORT}`));
+app.listen(3000, () => console.log('Bot running on 3000'));
