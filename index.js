@@ -68,4 +68,4 @@ async function sendImage(jid, imageId, caption) {
     }, { headers: { apikey: API_KEY } });
 }
 
-app.listen(PORT, () => console.log(`Bot Online na porta ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Bot Online na porta ${PORT}`));
