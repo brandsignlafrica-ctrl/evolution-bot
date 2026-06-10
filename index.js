@@ -11,7 +11,7 @@ const API_KEY = process.env.API_KEY;
 const PORT = process.env.PORT || 3000; // Railway gives PORT automatically
 
 // 1 HERO IMAGE FOR WHOLE NICHE - BOT RULE
-const HERO_IMAGE = '27283658664651159'; // Replace with your nails image ID
+const HERO_IMAGE = 'test123'; // temp test'; // Replace with your nails image ID
 
 // Health check for Railway
 app.get('/', (req, res) => res.send('Bot Online'));
