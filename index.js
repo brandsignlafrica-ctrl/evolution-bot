@@ -9,11 +9,11 @@ const PORT = process.env.PORT || 8080;
 const EVOLUTION_API_URL = 'https://evolution-api-production-53a9.up.railway.app';
 const API_KEY = 'FDE3646665F6-4E47-A279-A6BECE1C3D5D';
 const INSTANCE_NAME = 'Brandsignl Main V4';
-const ALLOWED_TESTER = '27833272007@s.whatsapp.net'; // Your personal testing WhatsApp JID
+const ALLOWED_TESTER = '27833272007@s.whatsapp.net';
 
 /**
  * 1. FORCE-BIND WEBHOOK ON STARTUP
- * Updated to use the correct v2 layout keys for instance-level webhooks
+ * Evolution API v2.2+ strict NestJS payload structure requires the 'webhook' object wrapper
  */
 const encodedInstance = encodeURIComponent(INSTANCE_NAME);
 const bindUrl = EVOLUTION_API_URL + '/webhook/set/' + encodedInstance;
@@ -25,13 +25,16 @@ fetch(bindUrl, {
     'apikey': API_KEY
   },
   body: JSON.stringify({
-    url: 'https://evolution-bot-production.up.railway.app/webhook',
-    enabled: true,
-    webhook_by_events: true, // Evolution API native database snake_case fallback
-    events: [
-      'MESSAGES_UPSERT',
-      'CONNECTION_UPDATE'
-    ]
+    webhook: {
+      enabled: true,
+      url: 'https://evolution-bot-production.up.railway.app/webhook',
+      byEvents: false,
+      base64: false,
+      events: [
+        'MESSAGES_UPSERT',
+        'CONNECTION_UPDATE'
+      ]
+    }
   })
 })
 .then(response => response.json())
@@ -52,10 +55,8 @@ app.post('/webhook', async (req, res) => {
   try {
     const { event, data } = req.body;
 
-    // Fast-reply acknowledgment to stop webhook duplication/retries
     res.status(200).send({ status: 'received' });
 
-    // Evolution API sends events sometimes in lower-case or upper-case depending on config source
     const normalizedEvent = (event || '').toUpperCase();
 
     if (normalizedEvent !== 'MESSAGES_UPSERT') {
@@ -67,7 +68,6 @@ app.post('/webhook', async (req, res) => {
     if (!data || !data.key) return;
     if (data.key.fromMe === true) return; 
 
-    // Extract who sent the message from the payload body metadata
     const remoteJid = data.key.remoteJid;
 
     if (remoteJid !== ALLOWED_TESTER) {
