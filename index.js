@@ -126,4 +126,7 @@ async function sendWhatsAppText(toJid, textContent) {
 }
 
 // Start up engine listener
-app.listen(PORT
+app.listen(PORT, () => {
+  console.log('STARTUP: Live Production Engine Online (With Tracking Lights)');
+  console.log(SERVER READY ON PORT ${PORT});
+});
