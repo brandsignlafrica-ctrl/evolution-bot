@@ -3,6 +3,12 @@ import express from 'express';
 const app = express();
 app.use(express.json());
 
+// 🚨 THE RADAR: Catches literally any traffic hitting the server
+app.use((req, res, next) => {
+  console.log(📡 [RADAR] Incoming ${req.method} request to ${req.path});
+  next();
+});
+
 const PORT = process.env.PORT || 8080;
 
 // Configuration Constants
@@ -13,7 +19,6 @@ const ALLOWED_TESTER = '27833272007@s.whatsapp.net';
 
 /**
  * 1. FORCE-BIND WEBHOOK ON STARTUP
- * Evolution API v2.2+ strict NestJS payload structure requires the 'webhook' object wrapper
  */
 const encodedInstance = encodeURIComponent(INSTANCE_NAME);
 const bindUrl = EVOLUTION_API_URL + '/webhook/set/' + encodedInstance;
@@ -46,7 +51,6 @@ fetch(bindUrl, {
   }
 })
 .catch(error => console.error('💥 FORCE-BIND NETWORK ERROR:', error));
-
 
 /**
  * 2. INBOUND WEBHOOK ROUTE
@@ -92,7 +96,6 @@ app.post('/webhook', async (req, res) => {
     console.error('💥 Webhook runtime processor crashed:', err);
   }
 });
-
 
 /**
  * 3. OUTBOUND API HELPER
