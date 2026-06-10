@@ -77,4 +77,4 @@ app.post('/webhook', async (req, res) => {
 
 process.on('uncaughtException', err => console.log('CRASH:', err));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Bot running on ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Bot running on ${PORT}`));
