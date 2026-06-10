@@ -16,7 +16,7 @@ const ALLOWED_TESTER = '27833272007@s.whatsapp.net'; // Your personal testing Wh
  * Tells Evolution API exactly where to route inbound messages
  */
 const encodedInstance = encodeURIComponent(INSTANCE_NAME);
-fetch(${EVOLUTION_API_URL}/webhook/instance/${encodedInstance}, {
+fetch(`${EVOLUTION_API_URL}/webhook/instance/${encodedInstance}`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
