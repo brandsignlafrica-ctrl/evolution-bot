@@ -3,7 +3,7 @@ import express from 'express';
 const app = express();
 app.use(express.json());
 
-// 🚨 THE RADAR: Catches literally any traffic hitting the server using safe string formatting
+// 🚨 THE RADAR: Catches literally any traffic hitting the server
 app.use((req, res, next) => {
   console.log('📡 [RADAR] Incoming ' + req.method + ' request to ' + req.path);
   next();
@@ -53,7 +53,7 @@ fetch(bindUrl, {
 .catch(error => console.error('💥 FORCE-BIND NETWORK ERROR:', error));
 
 /**
- * 2. INBOUND WEBHOOK ROUTE
+ * 2. INBOUND WEBHOOK ROUTE (WITH DEEP DEBUGGING)
  */
 app.post('/webhook', async (req, res) => {
   try {
@@ -69,18 +69,36 @@ app.post('/webhook', async (req, res) => {
 
     console.log('INBOUND WEBHOOK -> Event: ' + event + ' | Instance: ' + INSTANCE_NAME);
 
-    if (!data || !data.key) return;
-    if (data.key.fromMe === true) return; 
-
-    const remoteJid = data.key.remoteJid;
-
-    if (remoteJid !== ALLOWED_TESTER) {
-      console.log('❌ BLOCK: Sender (' + remoteJid + ') did not match ALLOWED_TESTER. Dropping message.');
+    // 🚨 DEBUGGER: Check for missing data
+    if (!data) {
+      console.log('🛑 DROPPED: Data payload is completely empty.');
       return;
     }
 
-    const incomingText = data.message?.conversation || 
-                         data.message?.extendedTextMessage?.text || 
+    // Safely handle both Object and Array structures from Evolution API
+    const messageData = Array.isArray(data) ? data[0] : data;
+
+    // 🚨 DEBUGGER: Check for missing key structure
+    if (!messageData || !messageData.key) {
+      console.log('🛑 DROPPED: No message key found. Raw payload:', JSON.stringify(data).substring(0, 300));
+      return;
+    }
+
+    // 🚨 DEBUGGER: Check if the bot is talking to itself
+    if (messageData.key.fromMe === true) {
+      console.log('🛑 DROPPED: Ignoring message sent by the bot itself (fromMe = true).');
+      return;
+    }
+
+    const remoteJid = messageData.key.remoteJid;
+
+    if (remoteJid !== ALLOWED_TESTER) {
+      console.log('❌ BLOCK: Sender (' + remoteJid + ') did not match ALLOWED_TESTER.');
+      return;
+    }
+
+    const incomingText = messageData.message?.conversation || 
+                         messageData.message?.extendedTextMessage?.text || 
                          "";
 
     console.log('📩 Processing message from tester [' + remoteJid + ']: ' + incomingText);
