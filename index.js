@@ -13,10 +13,12 @@ const ALLOWED_TESTER = '27833272007@s.whatsapp.net'; // Your personal testing Wh
 
 /**
  * 1. FORCE-BIND WEBHOOK ON STARTUP
- * Tells Evolution API exactly where to route inbound messages
+ * Concatenating strings cleanly with regular quotes to prevent syntax errors
  */
 const encodedInstance = encodeURIComponent(INSTANCE_NAME);
-fetch(`${EVOLUTION_API_URL}/webhook/instance/${encodedInstance}`, {
+const bindUrl = EVOLUTION_API_URL + '/webhook/instance/' + encodedInstance;
+
+fetch(bindUrl, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -45,47 +47,40 @@ fetch(`${EVOLUTION_API_URL}/webhook/instance/${encodedInstance}`, {
 
 /**
  * 2. INBOUND WEBHOOK ROUTE
- * Handles all background events routed from Evolution API
  */
 app.post('/webhook', async (req, res) => {
   try {
     const { event, data } = req.body;
 
-    // Acknowledge receipt immediately back to Evolution API to prevent retries
     res.status(200).send({ status: 'received' });
 
-    // Filter out background noise (like contact or presence syncs)
     if (event !== 'MESSAGES_UPSERT') {
       return; 
     }
 
-    console.log(INBOUND WEBHOOK -> Event: ${event} | Instance: ${INSTANCE_NAME});
+    console.log('INBOUND WEBHOOK -> Event: ' + event + ' | Instance: ' + INSTANCE_NAME);
 
-    // Structure safeguard: Ensure data object exists and isn't from the bot itself
     if (!data || !data.key) return;
     if (data.key.fromMe === true) return; 
 
-    // Extract who sent the message
     const remoteJid = data.key.remoteJid;
 
-    // Security gate: Ensure only your specific test number can execute processing
     if (remoteJid !== ALLOWED_TESTER) {
-      console.log(❌ BLOCK: Sender (${remoteJid}) did not match ALLOWED_TESTER. Dropping message.);
+      console.log('❌ BLOCK: Sender (' + remoteJid + ') did not match ALLOWED_TESTER. Dropping message.');
       return;
     }
 
-    // Safely extract the inbound message text string from Evolution API v2 payload structure
     const incomingText = data.message?.conversation || 
                          data.message?.extendedTextMessage?.text || 
                          "";
 
-    console.log(📩 Processing message from tester [${remoteJid}]: "${incomingText}");
+    console.log('📩 Processing message from tester [' + remoteJid + ']: ' + incomingText);
 
     // --- YOUR BOT RESPONDING LOGIC GOES HERE ---
     if (incomingText.toLowerCase().trim() === 'ping') {
       await sendWhatsAppText(remoteJid, 'Pong! 🚀 Bot engine is fully operational.');
     } else {
-      await sendWhatsAppText(remoteJid, Received your message: "${incomingText}");
+      await sendWhatsAppText(remoteJid, 'Received your message: ' + incomingText);
     }
 
   } catch (err) {
@@ -96,11 +91,13 @@ app.post('/webhook', async (req, res) => {
 
 /**
  * 3. OUTBOUND API HELPER
- * Sends text payloads back to the user via Evolution API
+ * No backticks here either—standard concatenation string construction
  */
 async function sendWhatsAppText(toJid, textContent) {
   try {
-    const response = await fetch(${EVOLUTION_API_URL}/message/sendText/${encodedInstance}, {
+    const sendUrl = EVOLUTION_API_URL + '/message/sendText/' + encodedInstance;
+    
+    const response = await fetch(sendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -119,14 +116,13 @@ async function sendWhatsAppText(toJid, textContent) {
     });
 
     const result = await response.json();
-    console.log(📤 Reply dispatched status:, result.status || 'Sent');
+    console.log('📤 Reply dispatched status:', result.status || 'Sent');
   } catch (error) {
     console.error('❌ Failed to push outbound reply:', error);
   }
 }
 
-// Start up engine listener
 app.listen(PORT, () => {
   console.log('STARTUP: Live Production Engine Online (With Tracking Lights)');
-  console.log(SERVER READY ON PORT ${PORT});
+  console.log('SERVER READY ON PORT ' + PORT);
 });
