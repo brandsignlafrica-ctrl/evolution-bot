@@ -3,9 +3,9 @@ import express from 'express';
 const app = express();
 app.use(express.json());
 
-// 🚨 THE RADAR: Catches literally any traffic hitting the server
+// 🚨 THE RADAR: Catches literally any traffic hitting the server using safe string formatting
 app.use((req, res, next) => {
-  console.log(📡 [RADAR] Incoming ${req.method} request to ${req.path});
+  console.log('📡 [RADAR] Incoming ' + req.method + ' request to ' + req.path);
   next();
 });
 
