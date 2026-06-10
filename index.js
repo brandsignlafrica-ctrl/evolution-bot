@@ -5,9 +5,9 @@ import fs from 'fs';
 const app = express();
 app.use(express.json());
 
-const EVOLUTION_URL = 'https://api.whatsapp.com';
-const EVOLUTION_KEY = 'YOUR_API_KEY_HERE';
-const INSTANCE = 'YOUR_INSTANCE_NAME';
+const EVOLUTION_URL = 'https://evolution-api-production-53a9.up.railway.app';
+const EVOLUTION_KEY = 'brandsignl123';
+const INSTANCE = 'Brandsignl Main V4';
 const HERO_IMAGE = '27283658664651159@id';
 
 const STATE_FILE = '/tmp/states.json';
@@ -40,7 +40,6 @@ async function sendImage(to, imageId, caption) {
 
 app.post('/webhook', async (req, res) => {
   console.log('WEBHOOK HIT', new Date().toISOString());
-
   try {
     const data = req.body.data;
     if (!data?.message?.conversation) return res.sendStatus(200);
