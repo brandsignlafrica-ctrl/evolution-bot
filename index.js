@@ -1,5 +1,4 @@
     pushName: 'Tyronne',
-    status: 'DELIVERY_ACK',
     message: { conversation: 'Ping', messageContextInfo: [Object] },
     contextInfo: undefined,
     messageType: 'conversation',
