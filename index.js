@@ -1,4 +1,4 @@
-fetch('https://evolution-api-production-53a9.up.railway.app/webhook/set/Brandsignl%20Main%20V4', {
+fetch('https://evolution-api-production-53a9.up.railway.app/webhook/instance/Brandsignl%20Main%20V4', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -7,9 +7,19 @@ fetch('https://evolution-api-production-53a9.up.railway.app/webhook/set/Brandsig
   body: JSON.stringify({
     url: 'https://evolution-bot-production.up.railway.app/webhook',
     enabled: true,
-    events: ['messages.upsert', 'connection.update']
+    webhookByEvents: true,
+    events: [
+      'MESSAGES_UPSERT',
+      'CONNECTION_UPDATE'
+    ]
   })
 })
 .then(response => response.json())
-.then(data => console.log('FORCE-BIND SUCCESS:', data))
-.catch(error => console.error('FORCE-BIND ERROR:', error));
+.then(data => {
+  if (data.status === 400 || data.error) {
+    console.error('❌ FORCE-BIND FAILED:', data);
+  } else {
+    console.log('✅ FORCE-BIND SUCCESS:', data);
+  }
+})
+.catch(error => console.error('💥 FORCE-BIND NETWORK ERROR:', error));
