@@ -13,7 +13,7 @@ const ALLOWED_TESTER = '27833272007@s.whatsapp.net'; // Your personal testing Wh
 
 /**
  * 1. FORCE-BIND WEBHOOK ON STARTUP
- * Uses standard string concatenation to prevent build environment crashes
+ * Updated to use the correct v2 layout keys for instance-level webhooks
  */
 const encodedInstance = encodeURIComponent(INSTANCE_NAME);
 const bindUrl = EVOLUTION_API_URL + '/webhook/set/' + encodedInstance;
@@ -27,7 +27,7 @@ fetch(bindUrl, {
   body: JSON.stringify({
     url: 'https://evolution-bot-production.up.railway.app/webhook',
     enabled: true,
-    webhookByEvents: true,
+    webhook_by_events: true, // Evolution API native database snake_case fallback
     events: [
       'MESSAGES_UPSERT',
       'CONNECTION_UPDATE'
@@ -55,7 +55,10 @@ app.post('/webhook', async (req, res) => {
     // Fast-reply acknowledgment to stop webhook duplication/retries
     res.status(200).send({ status: 'received' });
 
-    if (event !== 'MESSAGES_UPSERT') {
+    // Evolution API sends events sometimes in lower-case or upper-case depending on config source
+    const normalizedEvent = (event || '').toUpperCase();
+
+    if (normalizedEvent !== 'MESSAGES_UPSERT') {
       return; 
     }
 
