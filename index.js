@@ -3,7 +3,7 @@ import express from 'express';
 const app = express();
 app.use(express.json());
 
-// 🚨 THE RADAR: Permanent logging visualizer for inbound web traffic
+// 🚨 THE RADAR: Track incoming traffic routes
 app.use((req, res, next) => {
   console.log('📡 [RADAR] Incoming ' + req.method + ' request to ' + req.path);
   next();
@@ -12,19 +12,16 @@ app.use((req, res, next) => {
 // CRITICAL: Dynamic platform port binding configuration 
 const PORT = process.env.PORT || 8080;
 
-// Environment mappings matching your exact active service setup
+// Mapping strictly to your validated Railway Environment Variables
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-53a9.up.railway.app';
 const API_KEY = process.env.EVOLUTION_API_KEY || 'FDE3646665F6-4E47-A279-A6BECE1C3D5D';
-const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE || 'Brandsignl Main V4';
 
-// Secure White-list definitions mapped exclusively to Tyronne's testing sessions
+// Secure White-list definitions mapped exclusively to your testing sessions
 const ALLOWED_PROFILES = [
-  '27833272007', // Standard international layout format
-  '27638151814', // System alternate routing sender string from API logs
-  '267207145730240' // Account identifier token from API payload
+  '27833272007', 
+  '27638151814', 
+  '267207145730240' 
 ];
-
-const encodedInstance = encodeURIComponent(INSTANCE_NAME);
 
 /**
  * 1. INBOUND WEBHOOK ROUTE
@@ -34,7 +31,7 @@ app.post('/webhook', async (req, res) => {
   res.status(200).send({ status: 'received' });
 
   try {
-    const { event, data } = req.body;
+    const { event, data, instance } = req.body;
 
     if ((event || '').toUpperCase() !== 'MESSAGES_UPSERT') {
       return; 
@@ -73,8 +70,8 @@ app.post('/webhook', async (req, res) => {
       replyText = 'R$29 via PIX único: https://pay.hotmart.com/W105949535S?bid=1780424594098\nPaga e manda comprovante que envio 6 posts editados já 👇✨';
     }
 
-    // Pass data payload onward for outbound response handling
-    await sendWhatsAppText(remoteJid, replyText);
+    // Pass the message onward using the EXACT instance name that sent the webhook
+    await sendWhatsAppText(instance, remoteJid, replyText);
 
   } catch (err) {
     console.error('💥 Webhook processing logic fault:', err);
@@ -84,11 +81,12 @@ app.post('/webhook', async (req, res) => {
 /**
  * 2. OUTBOUND DISPATCH MODULE
  */
-async function sendWhatsAppText(toJid, textContent) {
+async function sendWhatsAppText(instanceName, toJid, textContent) {
   try {
+    const encodedInstance = encodeURIComponent(instanceName);
     const sendUrl = EVOLUTION_API_URL + '/message/sendText/' + encodedInstance;
     
-    console.log('📤 Executing response post toward target JID string: ' + toJid);
+    console.log('📤 Executing response post to instance [' + instanceName + '] toward target: ' + toJid);
 
     const response = await fetch(sendUrl, {
       method: 'POST',
