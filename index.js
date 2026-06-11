@@ -16,6 +16,7 @@ const PORT = process.env.PORT || 8080;
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-53a9.up.railway.app';
 const API_KEY = process.env.EVOLUTION_API_KEY || 'FDE3646665F6-4E47-A279-A6BECE1C3D5D';
 const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE || 'Brandsignl Main V4';
+const STRICLY_ALLOWED_TESTER = '27833272007'; // Only Tyronne can trigger the bot
 
 const encodedInstance = encodeURIComponent(INSTANCE_NAME);
 
@@ -36,24 +37,32 @@ app.post('/webhook', async (req, res) => {
     // Safely handle both single object payloads and array structures
     const messageData = Array.isArray(data) ? data[0] : data;
 
-    if (!messageData || !messageData.key || messageData.key.fromMe === true) {
+    if (!messageData || !messageData.key) return;
+    if (messageData.key.fromMe === true) return;
+
+    const remoteJid = messageData.key.remoteJid || '';
+    const participant = messageData.key.participant || '';
+    
+    // Check if your testing number exists ANYWHERE in the sender fields
+    const isFromTester = remoteJid.includes(STRICLY_ALLOWED_TESTER) || 
+                         participant.includes(STRICLY_ALLOWED_TESTER);
+
+    if (!isFromTester) {
+      console.log('🔒 SECURITY SHIELD: Ignored message from customer/stranger to protect production environment.');
       return;
     }
-
-    const remoteJid = messageData.key.remoteJid;
-    const fromNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '');
 
     const incomingText = messageData.message?.conversation || 
                          messageData.message?.extendedTextMessage?.text || 
                          "";
 
-    console.log('📩 Processing text from ' + fromNumber + ': ' + incomingText);
+    console.log('📩 verified Tester [' + STRICLY_ALLOWED_TESTER + '] sent text: "' + incomingText + '"');
 
     // Default response message
     let replyText = 'Oi! Vi sua msg sobre posts pra salão 🌟 Quer ver amostra?';
 
-    // If they ask for a link, switch to the Hotmart offer
-    if (incomingText.toLowerCase().includes('link')) {
+    // Flexible keyword trigger handling
+    if (incomingText.toLowerCase().includes('link') || incomingText.toLowerCase().includes('ping')) {
       replyText = 'R$29 via PIX único: https://pay.hotmart.com/W105949535S?bid=1780424594098\nPaga e manda comprovante que envio 6 posts editados já 👇✨';
     }
 
@@ -66,13 +75,13 @@ app.post('/webhook', async (req, res) => {
 });
 
 /**
- * 2. OUTBOUND API HELPER (FIXED PAYLOAD PROPERTY)
+ * 2. OUTBOUND API HELPER
  */
 async function sendWhatsAppText(toJid, textContent) {
   try {
     const sendUrl = EVOLUTION_API_URL + '/message/sendText/' + encodedInstance;
     
-    console.log('📤 Dispatching outbound reply to: ' + toJid);
+    console.log('📤 Attempting dispatch to target JID: ' + toJid);
 
     const response = await fetch(sendUrl, {
       method: 'POST',
@@ -82,17 +91,18 @@ async function sendWhatsAppText(toJid, textContent) {
       },
       body: JSON.stringify({
         number: toJid,
-        text: textContent, // Match exact Evolution API v2 requirement
+        text: textContent,
         options: {
-          delay: 1200,
+          delay: 500,
           presence: 'composing'
         }
       })
     });
 
-    console.log('✅ Outbound delivery response status:', response.status);
+    const result = await response.json();
+    console.log('✅ API Return Code: ' + response.status + ' | Payload Response:', JSON.stringify(result));
   } catch (error) {
-    console.error('❌ Failed to push outbound reply:', error);
+    console.error('❌ Network crash trying to reach Evolution API endpoint:', error);
   }
 }
 
