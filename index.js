@@ -3,7 +3,7 @@ import express from 'express';
 const app = express();
 app.use(express.json());
 
-// 🚨 THE RADAR: Track incoming traffic routes
+// 🚨 THE RADAR: Permanent logging visualizer for inbound web traffic
 app.use((req, res, next) => {
   console.log('📡 [RADAR] Incoming ' + req.method + ' request to ' + req.path);
   next();
@@ -12,9 +12,10 @@ app.use((req, res, next) => {
 // CRITICAL: Dynamic platform port binding configuration 
 const PORT = process.env.PORT || 8080;
 
-// Mapping strictly to your validated Railway Environment Variables
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-53a9.up.railway.app';
-const API_KEY = process.env.EVOLUTION_API_KEY || 'FDE3646665F6-4E47-A279-A6BECE1C3D5D';
+// ✨ THE SANITIZERS: Stripping invisible spaces and trailing slashes 
+const EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || 'https://evolution-api-production-53a9.up.railway.app').replace(/\/$/, '');
+const API_KEY = (process.env.EVOLUTION_API_KEY || 'FDE3646665F6-4E47-A279-A6BECE1C3D5D').trim();
+const INSTANCE_NAME = (process.env.EVOLUTION_INSTANCE || 'Brandsignl Main V4').trim();
 
 // Secure White-list definitions mapped exclusively to your testing sessions
 const ALLOWED_PROFILES = [
@@ -31,17 +32,27 @@ app.post('/webhook', async (req, res) => {
   res.status(200).send({ status: 'received' });
 
   try {
-    const { event, data, instance } = req.body;
+    const { event, data } = req.body;
 
-    if ((event || '').toUpperCase() !== 'MESSAGES_UPSERT') {
+    // ✨ THE BUG FIX: Normalize the event name so "messages.upsert" matches "MESSAGES_UPSERT"
+    const eventName = (event || '').toUpperCase().replace('.', '_');
+
+    if (eventName !== 'MESSAGES_UPSERT') {
+      console.log('⚠️ Background noise ignored. Event type:', eventName || 'UNKNOWN');
       return; 
     }
 
-    // Standardize object payload mappings across arrays or single instances
+    // Standardize object payload mappings
     const messageData = Array.isArray(data) ? data[0] : data;
 
-    if (!messageData || !messageData.key) return;
-    if (messageData.key.fromMe === true) return;
+    if (!messageData || !messageData.key) {
+      console.log('⚠️ Payload dropped: No message key found in data.');
+      return;
+    }
+    if (messageData.key.fromMe === true) {
+      console.log('⚠️ Payload dropped: Message originated from the bot itself.');
+      return;
+    }
 
     const remoteJid = messageData.key.remoteJid || '';
     const participant = messageData.key.participant || '';
@@ -52,7 +63,7 @@ app.post('/webhook', async (req, res) => {
     );
 
     if (!isFromTester) {
-      console.log('🔒 SHIELD: Ignored incoming communication from customer string.');
+      console.log('🔒 SHIELD: Ignored incoming communication from customer string:', remoteJid);
       return;
     }
 
@@ -70,8 +81,8 @@ app.post('/webhook', async (req, res) => {
       replyText = 'R$29 via PIX único: https://pay.hotmart.com/W105949535S?bid=1780424594098\nPaga e manda comprovante que envio 6 posts editados já 👇✨';
     }
 
-    // Pass the message onward using the EXACT instance name that sent the webhook
-    await sendWhatsAppText(instance, remoteJid, replyText);
+    // Execute outbound API dispatch
+    await sendWhatsAppText(remoteJid, replyText);
 
   } catch (err) {
     console.error('💥 Webhook processing logic fault:', err);
@@ -81,12 +92,12 @@ app.post('/webhook', async (req, res) => {
 /**
  * 2. OUTBOUND DISPATCH MODULE
  */
-async function sendWhatsAppText(instanceName, toJid, textContent) {
+async function sendWhatsAppText(toJid, textContent) {
   try {
-    const encodedInstance = encodeURIComponent(instanceName);
+    const encodedInstance = encodeURIComponent(INSTANCE_NAME);
     const sendUrl = EVOLUTION_API_URL + '/message/sendText/' + encodedInstance;
     
-    console.log('📤 Executing response post to instance [' + instanceName + '] toward target: ' + toJid);
+    console.log('📤 Executing response post to instance [' + INSTANCE_NAME + '] toward target: ' + toJid);
 
     const response = await fetch(sendUrl, {
       method: 'POST',
@@ -117,4 +128,5 @@ app.get('/', (req, res) => res.status(200).send('Active Application Engine'));
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log('Bot running cleanly on port ' + PORT);
+  console.log('Target Instance Bound To: [' + INSTANCE_NAME + ']');
 });
