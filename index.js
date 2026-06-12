@@ -146,4 +146,7 @@ async function sendWhatsAppText(toJid, textContent) {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.status(200).send('Active Application Engine'));
 
-app.listen(PORT, '0.0.0
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('Bot running cleanly on port ' + PORT);
+  console.log('Target Instance Bound To: [' + INSTANCE_NAME + ']');
+});
