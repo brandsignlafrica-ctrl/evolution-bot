@@ -87,9 +87,9 @@ export async function handleWhatsAppWebhook(req, res) {
           // STEP 5: PAYMENT ROUTING
           setTimeout(async () => {
             if (isBrazil) {
-              await sendWhatsAppText(remoteJid, 'R$29 via PIX único: https://pay.hotmart.com/W105949535S?bid=1780424594098\nPaga e manda o comprovante aqui 👇');
+              await sendWhatsAppText(remoteJid, 'R$29 via PIX único: [https://pay.hotmart.com/W105949535S?bid=1780424594098](https://pay.hotmart.com/W105949535S?bid=1780424594098)\nPaga e manda o comprovante aqui 👇');
             } else if (isSA) {
-              await sendWhatsAppText(remoteJid, 'Get all 6 templates for R99.\n\nOption 1: Instant (PayFast)\nhttps://payment.payfast.io/eng/process/payment/515b7db1-fb19-4084-94fb-8e01f94758e4\n\nOption 2: Cash/EFT\nReply "STOP" for manual banking details.');
+              await sendWhatsAppText(remoteJid, 'Get all 6 templates for R99.\n\nOption 1: Instant (PayFast)\n[https://payment.payfast.io/eng/process/payment/515b7db1-fb19-4084-94fb-8e01f94758e4](https://payment.payfast.io/eng/process/payment/515b7db1-fb19-4084-94fb-8e01f94758e4)\n\nOption 2: Cash/EFT\nReply "STOP" for manual banking details.');
             }
           }, 1500);
         }, 2000);
