@@ -8,7 +8,6 @@ const API_KEY = process.env.EVOLUTION_API_KEY || 'FDE3646665F6-4E47-A279-A6BECE1
 const INSTANCE_NAME = encodeURIComponent(process.env.EVOLUTION_INSTANCE || 'Brandsignl Main V4');
 
 const activeSessions = new Map();
-const processingLocks = new Set(); // 🚨 NEW: Prevents double-processing
 
 app.post('/webhook', async (req, res) => {
   res.status(200).send({ status: 'received' });
@@ -21,53 +20,55 @@ app.post('/webhook', async (req, res) => {
 
   const remoteJid = msg.key.remoteJid;
   const phone = remoteJid.split('@')[0];
+  const incomingText = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().trim();
+
+  // 🌍 LANGUAGE: Force PT for your test numbers, EN for everyone else
+  const isPT = phone.startsWith('55') || phone === '27833272007' || phone === '27638151814';
+
+  let session = activeSessions.get(phone) || { state: 'new' };
   
-  // 🚨 LOCK: If this phone is currently being processed, ignore the duplicate
-  if (processingLocks.has(phone)) return;
-  processingLocks.add(phone);
+  // 🔍 LOGGING: See the state in Railway logs
+  console.log('📡 [DEBUG] Phone:', phone, '| Current State:', session.state, '| Input:', incomingText);
 
-  try {
-    const incomingText = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().trim();
-    
-    // 🌍 HARD-CODED LANGUAGE ROUTING (Add your test numbers here)
-    const isBrazil = phone.startsWith('55') || phone === '27833272007' || phone === '27638151814';
+  // RESET LOGIC
+  if (['novo', 'start', 'reset'].includes(incomingText)) {
+    activeSessions.set(phone, { state: 'new' });
+    await sendText(remoteJid, isPT ? 'Funil reiniciado. Você faz unhas, cabelo ou cílios?' : 'Funnel reset. Do you do nails, hair, or lashes?');
+    return;
+  }
 
-    let session = activeSessions.get(phone) || { state: 'new' };
-
-    if (['novo', 'start', 'reset'].includes(incomingText)) {
-      activeSessions.set(phone, { state: 'new' });
-      await sendText(remoteJid, isBrazil ? 'Funil reiniciado. Você faz unhas, cabelo ou cílios?' : 'Funnel reset. Do you do nails, hair, or lashes?');
-      return;
-    }
-
-    switch (session.state) {
-      case 'new':
-        if (incomingText.includes('unha') || incomingText.includes('nail') || incomingText.includes('cabelo') || incomingText.includes('hair') || incomingText.includes('cílio') || incomingText.includes('lash')) {
-          session.state = 'waiting_for_name';
-          activeSessions.set(phone, session);
-          await sendText(remoteJid, isBrazil ? 'Ótimo! Qual o nome do seu negócio?' : 'Great! What is your business name?');
-        } else {
-          await sendText(remoteJid, isBrazil ? 'Oi! Você trabalha com unhas, cabelo ou cílios?' : 'Hi! Do you work with nails, hair, or lashes?');
-        }
-        break;
-
-      case 'waiting_for_name':
-        session.businessName = incomingText;
-        session.state = 'done';
-        activeSessions.set(phone, session);
-
-        await sendMedia(remoteJid, 'https://images.unsplash.com/photo-1560066984-138dadb4c078?q=80&w=500', (isBrazil ? 'Amostra para ' : 'Sample for ') + session.businessName);
+  // STATE MACHINE
+  switch (session.state) {
+    case 'new':
+      if (incomingText.includes('unha') || incomingText.includes('nail') || 
+          incomingText.includes('cabelo') || incomingText.includes('hair') || 
+          incomingText.includes('cílio') || incomingText.includes('lash')) {
         
+        session.state = 'waiting_for_name';
+        activeSessions.set(phone, session);
+        await sendText(remoteJid, isPT ? 'Ótimo! Qual o nome do seu negócio?' : 'Great! What is your business name?');
+      } else {
+        await sendText(remoteJid, isPT ? 'Oi! Você trabalha com unhas, cabelo ou cílios?' : 'Hi! Do you work with nails, hair, or lashes?');
+      }
+      break;
+
+    case 'waiting_for_name':
+      session.businessName = incomingText;
+      session.state = 'done'; // Lock the state
+      activeSessions.set(phone, session);
+
+      // DELIVER
+      const sampleUrl = 'https://images.unsplash.com/photo-1560066984-138dadb4c078?q=80&w=500';
+      await sendMedia(remoteJid, sampleUrl, (isPT ? 'Amostra para ' : 'Sample for ') + session.businessName);
+      
+      setTimeout(async () => {
+        await sendText(remoteJid, isPT ? '1. Selfies confundem o algoritmo.\n2. Estes 6 posts corrigem isso.\n3. Veja o resultado.' : '1. Selfies confuse the algorithm.\n2. These 6 posts fix that.\n3. See the results.');
         setTimeout(async () => {
-          await sendText(remoteJid, isBrazil ? '1. Selfies confundem o algoritmo.\n2. Estes 6 posts corrigem isso.\n3. Veja o resultado.' : '1. Selfies confuse the algorithm.\n2. These 6 posts fix that.\n3. See the results.');
-          setTimeout(async () => {
-            await sendText(remoteJid, isBrazil ? 'R$29 via PIX: https://pay.hotmart.com/W105949535S' : 'Get 6 templates for R99: https://payment.payfast.io/eng/process/payment/515b7db1-fb19-4084-94fb-8e01f94758e4');
-          }, 1000);
-        }, 1500);
-        break;
-    }
-  } finally {
-    processingLocks.delete(phone); // Unlock so they can message again later
+          const pay = isPT ? 'R$29 via PIX: https://pay.hotmart.com/W105949535S' : 'Get 6 templates for R99: https://payment.payfast.io/eng/process/payment/515b7db1-fb19-4084-94fb-8e01f94758e4';
+          await sendText(remoteJid, pay);
+        }, 1000);
+      }, 2000);
+      break;
   }
 });
 
