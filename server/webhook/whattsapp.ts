@@ -1,11 +1,11 @@
-import { db } from '../../db';
+import { db } from '../../db'; 
 import { whatsappLeads } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { sendWhatsAppText, sendWhatsAppImage } from '../services/evolutionApi';
 import { generateHookCard } from '../services/imageGeneration';
 
 export async function handleWhatsAppWebhook(req: any, res: any) {
-  // 1. Immediately acknowledge
+  // 1. Acknowledge immediately to prevent retry loops
   res.status(200).send({ status: 'received' });
 
   try {
@@ -16,11 +16,10 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
     if (messageData.key.fromMe) return;
 
     const remoteJid = messageData.key.remoteJid;
-    // FIX: Extract phone as a string properly
-    const phone = remoteJid.split('@')[0]; 
+    const phone = remoteJid.split('@')[0];
     const incomingText = (messageData.message?.conversation || messageData.message?.extendedTextMessage?.text || '').toLowerCase().trim();
 
-    // 2. Fetch Lead
+    // 2. Fetch Lead State from DB
     let lead = await db.select().from(whatsappLeads).where(eq(whatsappLeads.phone, phone)).limit(1).then(r => r[0]);
 
     if (!lead) {
@@ -33,7 +32,7 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
       return await sendWhatsAppText(remoteJid, 'Funnel reset. Send "nails" or "hair" to start.');
     }
 
-    // 4. State Machine
+    // 4. State Machine Funnel
     switch (lead.state) {
       case 'new': {
         if (incomingText.includes('nail') || incomingText.includes('hair') || incomingText.includes('lash')) {
@@ -49,11 +48,13 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
       case 'data_pending': {
         await db.update(whatsappLeads).set({ state: 'sample_delivered', business_name: incomingText }).where(eq(whatsappLeads.phone, phone));
         
-        // Generate and Send
+        // Use Sharp/SVG engine to generate the image
         const buffer = await generateHookCard({ niche: lead.niche, businessName: incomingText, phone });
+        
+        // Evolution API requires Base64 for the 'media' field
         await sendWhatsAppImage(remoteJid, buffer.toString('base64'), 'Here is your custom sample!');
         
-        // Conviction
+        // Conviction timing
         setTimeout(async () => {
           await sendWhatsAppText(remoteJid, '1. Posting selfies confuses the algorithm.\n2. These 6 posts teach Meta: "this page = appointments".\n3. One client already pays for this 5x over.');
         }, 2000);
@@ -61,6 +62,6 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
       }
     }
   } catch (err) {
-    console.error('💥 Logic Error:', err);
+    console.error('💥 Webhook Error:', err);
   }
 }
