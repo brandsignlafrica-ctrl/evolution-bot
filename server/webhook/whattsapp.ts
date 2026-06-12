@@ -1,12 +1,10 @@
-// @ts-nocheck
 import { db } from '../../db';
 import { whatsappLeads } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { sendWhatsAppText, sendWhatsAppImage } from '../services/evolutionApi';
 import { generateHookCard } from '../services/imageGeneration';
 
-// Pilot Opening Lines
-const NICHE_CAPTIONS = {
+const NICHE_CAPTIONS: any = {
   nails: { pt: "Você tentou dar um 'jeitinho' na unha, mas agora ela está pior do que antes, não está?", en: "You thought you were getting a deal. Now your natural nails are gone." },
   hair: { pt: "Você economizou no cabelo. E agora, o que você faz com esse arrependimento?", en: "The 'bargain' that cost you your hair quality." },
   lashes: { pt: "Aquele 'jeitinho' no cílio que só te deu mais dor de cabeça.", en: "You thought you were getting a deal. Now your natural lashes are gone." }
@@ -19,37 +17,34 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
     const { event, data } = req.body;
     if (event !== 'messages.upsert') return;
 
-    // 🚨 BULLETPROOF FIX: Use data[0] and force 'any' type so TypeScript ignores it
     const messageData: any = Array.isArray(data) ? data[0] : data;
     
-    if (!messageData?.key || messageData.key.fromMe) return;
+    if (!messageData || !messageData.key || messageData.key.fromMe) return;
 
-    const remoteJid: string = messageData.key.remoteJid;
+    const remoteJid: string = messageData.key.remoteJid || '';
     const incomingText: string = (messageData.message?.conversation || messageData.message?.extendedTextMessage?.text || '').toLowerCase().trim();
     
-    // Extract phone securely
-    const phoneNumber = remoteJid.split('@')[0];
-    const isBrazil = phoneNumber.startsWith('55');
-    const isSA = phoneNumber.startsWith('27');
+    const phoneNumber: string = remoteJid.split('@')[0];
+    const isBrazil: boolean = phoneNumber.startsWith('55');
+    const isSA: boolean = phoneNumber.startsWith('27');
 
     let lead: any = await db.select().from(whatsappLeads).where(eq(whatsappLeads.phone, phoneNumber)).limit(1).then((res: any) => res[0]);
 
-    // Handle Reset
     if (['novo', 'start', 'reset'].includes(incomingText)) {
       await db.update(whatsappLeads).set({ state: 'new', niche: null }).where(eq(whatsappLeads.phone, phoneNumber));
-      return await sendWhatsAppText(remoteJid, isBrazil ? 'Funil reiniciado. Como posso ajudar?' : 'Funnel reset. How can I help?', {});
+      await sendWhatsAppText(remoteJid, isBrazil ? 'Funil reiniciado. Como posso ajudar?' : 'Funnel reset. How can I help?', {});
+      return;
     }
 
     if (!lead) {
-      const [newLead] = await db.insert(whatsappLeads).values({ phone: phoneNumber, country_code: isBrazil ? '+55' : '+27', state: 'new' }).returning();
+      const [newLead]: any = await db.insert(whatsappLeads).values({ phone: phoneNumber, country_code: isBrazil ? '+55' : '+27', state: 'new' }).returning();
       lead = newLead;
     }
 
     switch (lead.state) {
       case 'new': {
-        // STEP 1: AD KEYWORD AUTO-LOCK
         const nicheKeywords: any = { nails: ['unha', 'nail'], hair: ['cabelo', 'hair'], lashes: ['cílio', 'lash'] };
-        let detectedNiche = Object.keys(nicheKeywords).find(key => 
+        let detectedNiche: string | undefined = Object.keys(nicheKeywords).find((key: string) => 
           nicheKeywords[key].some((k: string) => incomingText.includes(k))
         );
 
@@ -65,20 +60,16 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
       }
 
       case 'data_pending': {
-        // STEP 2 & 3: BRANDED SAMPLE GENERATION
         const businessName = incomingText;
         await db.update(whatsappLeads).set({ business_name: businessName, state: 'sample_delivered' }).where(eq(whatsappLeads.phone, phoneNumber));
 
-        // Generate Image
         const imageBuffer: any = await generateHookCard({ niche: lead.niche, businessName, phone: phoneNumber });
         
-        // Safely extract the caption based on niche
-        const nicheKey = lead.niche || 'nails';
-        const caption = isBrazil ? (NICHE_CAPTIONS as any)[nicheKey].pt : (NICHE_CAPTIONS as any)[nicheKey].en;
+        const nicheKey: string = lead.niche || 'nails';
+        const caption: string = isBrazil ? NICHE_CAPTIONS[nicheKey].pt : NICHE_CAPTIONS[nicheKey].en;
 
         await sendWhatsAppImage(remoteJid, imageBuffer.toString('base64'), caption, {});
 
-        // STEP 4: THE ALGORITHM FIX (CONVICTION LAYER)
         setTimeout(async () => {
           const convictionText = isBrazil
             ? '1. Postar selfies confunde o algoritmo; ele te mostra para amigos, não compradoras.\n2. Esses 6 posts corrigem isso. Eles são "buyer-intent" e ensinam a Meta: "esta página = agendamentos".\n3. Resultado: Uma cliente já paga este investimento 5x.'
@@ -86,7 +77,6 @@ export async function handleWhatsAppWebhook(req: any, res: any) {
           
           await sendWhatsAppText(remoteJid, convictionText, {});
 
-          // STEP 5: PAYMENT ROUTING
           setTimeout(async () => {
             if (isBrazil) {
               await sendWhatsAppText(remoteJid, 'R$29 via PIX único: https://pay.hotmart.com/W105949535S?bid=1780424594098\nPaga e manda o comprovante aqui 👇', {});
