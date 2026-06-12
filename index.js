@@ -24,6 +24,9 @@ const ALLOWED_PROFILES = [
   '267207145730240' 
 ];
 
+// 🛡️ THE CACHE: Memory vault for recent message IDs to prevent loops
+const processedMessages = new Set();
+
 /**
  * 1. INBOUND WEBHOOK ROUTE
  */
@@ -49,7 +52,24 @@ app.post('/webhook', async (req, res) => {
       console.log('⚠️ Payload dropped: No message key found in data.');
       return;
     }
-    if (messageData.key.fromMe === true) {
+
+    // 🛡️ THE GATEKEEPER: Deduplication Check
+    const messageId = messageData.key.id;
+    if (processedMessages.has(messageId)) {
+      console.log('🔄 Ghost Queue Drop: Already processed message ID:', messageId);
+      return; // Stop processing! We already replied to this.
+    }
+    
+    // Add the ID to our memory vault
+    processedMessages.add(messageId);
+    
+    // Prevent memory leaks by clearing the vault if it gets too large
+    if (processedMessages.size > 500) {
+      processedMessages.clear();
+    }
+
+    // ✨ THE BUG FIX: Catch both strict boolean true and string "true"
+    if (messageData.key.fromMe) {
       console.log('⚠️ Payload dropped: Message originated from the bot itself.');
       return;
     }
@@ -126,7 +146,4 @@ async function sendWhatsAppText(toJid, textContent) {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.status(200).send('Active Application Engine'));
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('Bot running cleanly on port ' + PORT);
-  console.log('Target Instance Bound To: [' + INSTANCE_NAME + ']');
-});
+app.listen(PORT, '0.0.0
